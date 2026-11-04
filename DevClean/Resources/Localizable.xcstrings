@@ -1,0 +1,316 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Analyzing…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Анализ…"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
+          }
+        }
+      }
+    },
+    "Clean" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить"
+          }
+        }
+      }
+    },
+    "Clean Selected" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить выбранное"
+          }
+        }
+      }
+    },
+    "Clean the selected modules" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запустить очистку отмеченных модулей"
+          }
+        }
+      }
+    },
+    "Clean the selected modules?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить выбранные модули?"
+          }
+        }
+      }
+    },
+    "Cleaning…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистка…"
+          }
+        }
+      }
+    },
+    "Click a module to exclude it from cleaning" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите, чтобы исключить модуль из очистки"
+          }
+        }
+      }
+    },
+    "Click “Rescan” to run the analysis again." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите «Пересканировать», чтобы повторить анализ."
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировать"
+          }
+        }
+      }
+    },
+    "Copy the entire log to the clipboard" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировать весь журнал в буфер обмена"
+          }
+        }
+      }
+    },
+    "Dev Cache Cleaner" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dev Cache Cleaner"
+          }
+        }
+      }
+    },
+    "Error: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ошибка: %@"
+          }
+        }
+      }
+    },
+    "Exit code: %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Код выхода: %lld"
+          }
+        }
+      }
+    },
+    "Failed to launch the process: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ошибка запуска процесса: %@"
+          }
+        }
+      }
+    },
+    "Log" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Журнал"
+          }
+        }
+      }
+    },
+    "Modules" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Модули"
+          }
+        }
+      }
+    },
+    "No modules found" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Список модулей пуст"
+          }
+        }
+      }
+    },
+    "Rescan" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пересканировать"
+          }
+        }
+      }
+    },
+    "Run the analysis for all modules again" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторно выполнить анализ всех модулей"
+          }
+        }
+      }
+    },
+    "Scanning caches…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сканирование кэшей…"
+          }
+        }
+      }
+    },
+    "Script output will appear here…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вывод скрипта появится здесь…"
+          }
+        }
+      }
+    },
+    "Select the modules to clean. Sizes were measured during the last analysis." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отметьте модули, которые нужно очистить: размеры получены при анализе."
+          }
+        }
+      }
+    },
+    "Selected %lld of %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрано %1$lld из %2$lld"
+          }
+        }
+      }
+    },
+    "Success" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Успешно"
+          }
+        }
+      }
+    },
+    "The following will be cleaned:\n%@\n\nThis action cannot be undone. Continue?" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Будут очищены:\n%@\n\nДействие необратимо. Продолжить?"
+          }
+        }
+      }
+    },
+    "The script %@.%@ was not found in the app bundle." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скрипт %1$@.%2$@ не найден в бандле приложения."
+          }
+        }
+      }
+    },
+    "The script file is unavailable:\n%@\nThe app bundle was removed (most likely because DerivedData was cleaned, where it lives). Rebuild the project (⌘R)." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "файл скрипта недоступен:\n%@\nБандл приложения был удалён (скорее всего, очисткой DerivedData, в которой он лежит). Пересоберите проект (⌘R)."
+          }
+        }
+      }
+    },
+    ">>> Cancellation: SIGTERM sent…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Отмена: отправлен SIGTERM…"
+          }
+        }
+      }
+    },
+    ">>> The process finished. Exit code: %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Процесс завершён. Код выхода: %lld"
+          }
+        }
+      }
+    },
+    ">>> The process was interrupted by a signal (code %lld)." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Процесс прерван сигналом (код %lld)."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.3"
+}

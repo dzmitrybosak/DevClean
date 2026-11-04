@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Single source of truth for the modules handled by this script. The order is
+# meaningful: totals are emitted in this order. Keep in sync with
+# CleanupModuleCatalog.swift.
+MODULE_IDS="xcode xcode-archives xcode-simulators swiftpm cocoapods carthage packages ai docker"
+
+MODE="analyze"
+MODULES_CSV=$(printf '%s' "$MODULE_IDS" | tr ' ' ',')
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --execute)   MODE="execute" ;;
+    --analyze)   MODE="analyze" ;;
+    --modules)   shift; MODULES_CSV="${1:-}" ;;
+    --modules=*) MODULES_CSV="${1#*=}" ;;
+  esac
+  shift
+done
+
+selected() {
+  case ",${MODULES_CSV}," in *",$1,"*) return 0;; *) return 1;; esac
+}
+
+is_module() {
+  case " $MODULE_IDS " in
+    *" $1 "*) return 0 ;;
+    *)        return 1 ;;
+  esac
+}
+
+# Absolute path of this script. When the app is launched from Xcode it lives
+# inside ~/Library/Developer/Xcode/DerivedData, so a naive `rm -rf DerivedData`
+# would delete the running app bundle along with this script.
+SELF_PATH="${BASH_SOURCE[0]:-$0}"
+case "$SELF_PATH" in
+  /*) ;;
+  *)  SELF_PATH="$PWD/$SELF_PATH" ;;
+esac
+
+# Keep the whole .app bundle containing this script (so the running app
+# survives); if the script is not inside a bundle, keep just the directory
+# chain leading to it.
+KEEP_PATH="$SELF_PATH"
+_probe="$SELF_PATH"
+while [ -n "$_probe" ]; do
+  case "$_probe" in
+    *.app) KEEP_PATH="$_probe"; break ;;
+  esac
+  _probe="${_probe%/*}"
+done
+
+# Delete a directory, but never the bundle that contains this script.
+remove_keeping_self() {
+  local dir="$1" child
+  [ -e "$dir" ] || return 0
+  case "$KEEP_PATH" in
+    "$dir")   return 0 ;;                 # this dir is the bundle: keep it
+    "$dir"/*) ;;                          # bundle lives below: descend
+    *)        rm -rf "$dir" 2>/dev/null; return 0 ;;
+  esac
+  for child in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [ -e "$child" ] || continue
+    remove_keeping_self "$child"
+  done
+}
+
+# macOS ships bash 3.2, which has no associative arrays, so per-module totals
+# live in T_<MODULE> variables addressed through indirect expansion.
+module_var() {
+  printf 'T_%s' "$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
+}
+
+for _module in $MODULE_IDS; do
+  eval "$(module_var "$_module")=0"
+done
+unset _module
+
+total_of() {
+  is_module "$1" || { echo 0; return; }
+  local var
+  var=$(module_var "$1")
+  eval "printf '%s' \"\${$var}\""
+}
+
+add_total() {
+  is_module "$1" || return 0
+  local var
+  var=$(module_var "$1")
+  eval "$var=\$(( $var + $2 ))"
+}
+
+module_name() {
+  case "$1" in
+    xcode)            echo "Xcode & iOS" ;;
+    xcode-archives)   echo "Xcode Archives" ;;
+    xcode-simulators) echo "Simulator data (erase all)" ;;
+    swiftpm)          echo "SwiftPM" ;;
+    cocoapods)        echo "CocoaPods" ;;
+    carthage)         echo "Carthage" ;;
+    packages)         echo "Package managers" ;;
+    ai)               echo "AI agents" ;;
+    docker)           echo "Docker" ;;
+    *)                echo "$1" ;;
+  esac
+}
+
+human_bytes() {
+  local b=$1
+  if   [ "$b" -ge 1073741824 ]; then awk -v b="$b" 'BEGIN{printf "%.2fG", b/1073741824}'
+  elif [ "$b" -ge 1048576 ];    then awk -v b="$b" 'BEGIN{printf "%.1fM", b/1048576}'
+  elif [ "$b" -ge 1024 ];       then awk -v b="$b" 'BEGIN{printf "%.0fK", b/1024}'
+  else echo "${b}B"; fi
+}
+
+dir_bytes() {
+  [ -e "$1" ] || { echo 0; return; }
+  du -sk "$1" 2>/dev/null | awk '{print $1*1024}' || echo 0
+}
+
+handle_dir() {
+  local module="$1" desc="$2" target="$3"
+  if [ ! -e "$target" ]; then
+    printf "  %-50s %s\n" "$desc" "(not found)"
+    return
+  fi
+  local b; b=$(dir_bytes "$target")
+  add_total "$module" "$b"
+  printf "  %-50s %s\n" "$desc" "$(human_bytes "$b")"
+  [ "$MODE" = "execute" ] && remove_keeping_self "$target"
+}
+
+handle_cmd() {
+  local module="$1" desc="$2" measure_dir="$3"; shift 3
+  local b=0
+  if [ -n "$measure_dir" ] && [ -e "$measure_dir" ]; then
+    b=$(dir_bytes "$measure_dir")
+    add_total "$module" "$b"
+    printf "  %-50s %s\n" "$desc" "$(human_bytes "$b")"
+  else
+    printf "  %-50s %s\n" "$desc" "(no size)"
+  fi
+  [ "$MODE" = "execute" ] && { "$@" >/dev/null 2>&1 || echo "    (command failed)"; }
+}
+
+emit() {
+  local m="$1"
+  echo "@@MODULE|$m|$(module_name "$m")|$(total_of "$m")"
+}
+
+begin_module() {
+  echo "=== $1 ==="
+}
+
+end_module() {
+  emit "$1"
+  echo
+}
+
+# ---------- AI agents ----------
+handle_ai() {
+  begin_module "AI agents"
+
+  # Claude Desktop
+  handle_dir ai "Claude Desktop cache" "$HOME/Library/Caches/com.anthropic.claudefordesktop"
+  handle_dir ai "Claude Desktop ShipIt" "$HOME/Library/Caches/com.anthropic.claudefordesktop.ShipIt"
+  # Claude Code (CLI)
+  handle_dir ai "Claude Code cache" "$HOME/.cache/claude"
+
+  # ChatGPT
+  handle_dir ai "ChatGPT cache (com.openai.chat)" "$HOME/Library/Caches/com.openai.chat"
+  handle_dir ai "ChatGPT Helper cache" "$HOME/Library/Caches/ChatGPTHelper"
+  handle_dir ai "ChatGPT cache (com.openai.ChatGPT)" "$HOME/Library/Caches/com.openai.ChatGPT"
+
+  # OpenCode
+  handle_dir ai "OpenCode cache (Library)" "$HOME/Library/Caches/opencode"
+  handle_dir ai "OpenCode cache (XDG)" "$HOME/.cache/opencode"
+
+  # MiMo Code
+  handle_dir ai "MiMo Code cache" "$HOME/.cache/mimocode"
+
+  # Xiaomi MiMo AI (desktop): bundle ids may change, so match cache directory
+  # names by glob inside Caches only. Application Support is never touched.
+  local ai_seen="" d name
+  for d in "$HOME/Library/Caches"/*[Xx]iaomi* "$HOME/Library/Caches"/*[Mm]imo*; do
+    [ -d "$d" ] || continue
+    case "$ai_seen" in
+      *"|$d|"*) continue ;;
+    esac
+    ai_seen="$ai_seen|$d|"
+    name=$(basename "$d")
+    handle_dir ai "Xiaomi MiMo cache ($name)" "$d"
+  done
+
+  end_module ai
+}
+# --------------------------------
+
+echo ">>> MODE: $MODE"
+echo ">>> Modules: $MODULES_CSV"
+echo
+
+if selected xcode; then
+  begin_module "Xcode & iOS"
+  handle_dir xcode "DerivedData"           "$HOME/Library/Developer/Xcode/DerivedData"
+  handle_dir xcode "iOS DeviceSupport"     "$HOME/Library/Developer/Xcode/iOS DeviceSupport"
+  handle_dir xcode "watchOS DeviceSupport" "$HOME/Library/Developer/Xcode/watchOS DeviceSupport"
+  handle_dir xcode "tvOS DeviceSupport"    "$HOME/Library/Developer/Xcode/tvOS DeviceSupport"
+  handle_dir xcode "Xcode cache"           "$HOME/Library/Caches/com.apple.dt.Xcode"
+  handle_dir xcode "CoreSimulator cache"   "$HOME/Library/Developer/CoreSimulator/Caches"
+  handle_cmd xcode "Remove unavailable simulators" "" xcrun simctl delete unavailable
+  end_module xcode
+fi
+
+if selected xcode-archives; then
+  begin_module "Xcode Archives"
+  handle_dir xcode-archives "Xcode Archives" "$HOME/Library/Developer/Xcode/Archives"
+  end_module xcode-archives
+fi
+
+if selected xcode-simulators; then
+  begin_module "Simulator data (ERASE ALL)"
+  handle_cmd xcode-simulators "Erase all simulators" "" xcrun simctl erase all
+  end_module xcode-simulators
+fi
+
+if selected swiftpm; then
+  begin_module "SwiftPM"
+  handle_dir swiftpm "SwiftPM cache" "$HOME/Library/Caches/org.swift.swiftpm"
+  end_module swiftpm
+fi
+
+if selected cocoapods; then
+  begin_module "CocoaPods"
+  handle_dir cocoapods "CocoaPods cache" "$HOME/Library/Caches/CocoaPods"
+  handle_cmd cocoapods "pod cache clean" "" pod cache clean --all
+  end_module cocoapods
+fi
+
+if selected carthage; then
+  begin_module "Carthage"
+  handle_dir carthage "CarthageKit cache" "$HOME/Library/Caches/org.carthage.CarthageKit"
+  handle_dir carthage "carthage cache"    "$HOME/Library/Caches/carthage"
+  end_module carthage
+fi
+
+if selected packages; then
+  begin_module "Package managers"
+  handle_dir packages "Homebrew cache" "$HOME/Library/Caches/Homebrew"
+  handle_dir packages "npm cache"      "$HOME/.npm/_cacache"
+  handle_dir packages "yarn cache"     "$HOME/Library/Caches/Yarn"
+  handle_dir packages "pnpm store"     "$HOME/.pnpm-store"
+  handle_dir packages "gradle caches"  "$HOME/.gradle/caches"
+  handle_dir packages "pip cache"      "$HOME/Library/Caches/pip"
+  handle_dir packages "uv cache"       "$HOME/.cache/uv"
+  handle_dir packages "go build cache" "$HOME/Library/Caches/go-build"
+  end_module packages
+fi
+
+if selected ai; then
+  handle_ai
+fi
+
+if selected docker; then
+  begin_module "Docker"
+  handle_cmd docker "Docker system prune" "$HOME/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw" docker system prune -af --volumes
+  end_module docker
+fi
+
+echo "@@DONE"
