@@ -12,20 +12,29 @@ final class CleanupViewModel {
     private(set) var selectedModuleIDs: Set<String> = []
     private(set) var logOutput = ""
     private(set) var runState: CleanupRunState = .idle
+    /// `true` when the last analysis did not run to completion, so the visible
+    /// module list may be missing entries.
+    private(set) var isAnalysisPartial = false
 
     @ObservationIgnored private let scriptRunner: CleanupScriptRunning
     @ObservationIgnored private let outputParser: CleanupOutputParsing
     @ObservationIgnored private let clipboard: ClipboardWriting
+    @ObservationIgnored private let startsAnalysisAutomatically: Bool
     @ObservationIgnored private var hasStarted = false
+    /// Incremented on every run so lines and results of an older, still
+    /// delivering run are ignored after a new one has begun.
+    @ObservationIgnored private var runGeneration = 0
 
     init(
         scriptRunner: CleanupScriptRunning,
         outputParser: CleanupOutputParsing,
-        clipboard: ClipboardWriting
+        clipboard: ClipboardWriting,
+        startsAnalysisAutomatically: Bool = true
     ) {
         self.scriptRunner = scriptRunner
         self.outputParser = outputParser
         self.clipboard = clipboard
+        self.startsAnalysisAutomatically = startsAnalysisAutomatically
     }
 
     // MARK: - Derived state
@@ -43,7 +52,7 @@ final class CleanupViewModel {
     }
 
     var canClean: Bool {
-        !isBusy && !selectedModuleIDs.isEmpty
+        !isBusy && !isAnalysisPartial && !selectedModuleIDs.isEmpty
     }
 
     var selectedSizeBytes: Int64 {
@@ -55,7 +64,7 @@ final class CleanupViewModel {
     var confirmationMessage: String {
         let list = modules
             .filter { selectedModuleIDs.contains($0.id) }
-            .map { "• \($0.name) — \($0.sizeBytes.byteCountFormatted)" }
+            .map { "• \($0.displayName) — \($0.sizeBytes.byteCountFormatted)" }
             .joined(separator: "\n")
 
         return String(
@@ -72,6 +81,7 @@ final class CleanupViewModel {
 
     /// Starts the initial analysis exactly once per app session.
     func startIfNeeded() {
+        guard startsAnalysisAutomatically else { return }
         guard !hasStarted else { return }
         hasStarted = true
         analyze()
@@ -114,20 +124,28 @@ final class CleanupViewModel {
 
         prepareSession(clearModules: mode == .analyze)
         runState = .running(mode)
+        runGeneration += 1
+        let generation = runGeneration
 
         do {
             try scriptRunner.run(
                 mode: mode,
                 moduleIDs: moduleIDs,
                 onLine: { [weak self] line in
-                    self?.handle(line)
+                    guard let self, self.runGeneration == generation else { return }
+                    self.handle(line)
                 },
                 onFinish: { [weak self] result in
-                    self?.finish(result, mode: mode)
+                    guard let self, self.runGeneration == generation else { return }
+                    self.finish(result, mode: mode)
                 }
             )
         } catch {
             runState = .idle
+            if mode == .analyze {
+                // Nothing was scanned, so whatever is on screen cannot be trusted.
+                isAnalysisPartial = true
+            }
             log("")
             if error is ScriptLocationError {
                 log(String(localized: "Error: \(error.localizedDescription)"))
@@ -143,6 +161,12 @@ final class CleanupViewModel {
             exitCode: result.exitCode,
             wasCancelled: result.wasCancelled
         )
+
+        if mode == .analyze {
+            // A cancelled or failed analysis stops mid-way: the partial module
+            // list must not be offered for cleaning.
+            isAnalysisPartial = result.wasCancelled || result.exitCode != 0
+        }
 
         log("")
         if result.wasInterruptedBySignal {
@@ -191,9 +215,9 @@ final class CleanupViewModel {
         if clearModules {
             modules = []
             selectedModuleIDs = []
+            isAnalysisPartial = false
         }
         logOutput = ""
-        runState = .idle
     }
 
     private func log(_ text: String) {

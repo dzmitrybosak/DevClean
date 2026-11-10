@@ -196,6 +196,9 @@ struct CleanupScriptTests {
         #expect(!calls.contains("--volumes"))
         #expect(!calls.contains("system prune"))
         #expect(temp.exists(disk))
+        // The VM disk is never measured: pruning does not shrink it, so the
+        // log must not promise a reclaimable size.
+        #expect(result.stdout.contains("(no size)"))
     }
 
     @Test func aiDiscoveryMatchesOnlyBundleLikeNames() throws {

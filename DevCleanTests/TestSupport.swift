@@ -40,6 +40,12 @@ final class FakeScriptRunner: CleanupScriptRunning {
         lineHandler?(line)
     }
 
+    /// The `onLine` handler registered by the most recent `run`, so a test can
+    /// deliver a line "from another run" after a new one has started.
+    func currentLineHandler() -> (@MainActor (String) -> Void)? {
+        lineHandler
+    }
+
     func finish(
         exitCode: Int32 = 0,
         reason: Process.TerminationReason = .exit,

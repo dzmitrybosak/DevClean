@@ -32,7 +32,34 @@
       }
     },
     ">>> Timeout: stopping the process…" : {
-
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Таймаут: остановка процесса…"
+          }
+        }
+      }
+    },
+    "AI agents" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ИИ-агенты"
+          }
+        }
+      }
+    },
+    "Analysis was interrupted — results are incomplete" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Анализ прерван — результаты неполные"
+          }
+        }
+      }
     },
     "Analyzing…" : {
       "localizations" : {
@@ -50,6 +77,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Отмена"
+          }
+        }
+      }
+    },
+    "Carthage" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carthage"
           }
         }
       }
@@ -124,6 +161,16 @@
         }
       }
     },
+    "CocoaPods" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CocoaPods"
+          }
+        }
+      }
+    },
     "Copy" : {
       "localizations" : {
         "ru" : {
@@ -150,6 +197,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dev Cache Cleaner"
+          }
+        }
+      }
+    },
+    "Docker" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docker"
           }
         }
       }
@@ -214,12 +271,32 @@
         }
       }
     },
+    "Package managers" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Менеджеры пакетов"
+          }
+        }
+      }
+    },
     "Rescan" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пересканировать"
+          }
+        }
+      }
+    },
+    "Run the analysis again to get complete results" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запустите анализ заново, чтобы получить полные результаты"
           }
         }
       }
@@ -274,12 +351,32 @@
         }
       }
     },
+    "Simulator data (erase all)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные симуляторов (стирание всех)"
+          }
+        }
+      }
+    },
     "Success" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Успешно"
+          }
+        }
+      }
+    },
+    "SwiftPM" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SwiftPM"
           }
         }
       }
@@ -310,6 +407,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "файл скрипта недоступен:\n%@\nБандл приложения был удалён (скорее всего, очисткой DerivedData, в которой он лежит). Пересоберите проект (⌘R)."
+          }
+        }
+      }
+    },
+    "Xcode & iOS" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xcode и iOS"
+          }
+        }
+      }
+    },
+    "Xcode Archives" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архивы Xcode"
           }
         }
       }

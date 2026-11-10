@@ -33,7 +33,7 @@ struct LineStreamReaderTests {
     private func read(_ data: Data) throws -> [String] {
         let (pipe, reader, collector) = makeReader()
         try pipe.fileHandleForWriting.write(contentsOf: data)
-        reader.finish()
+        collector.append(reader.finish())
         return collector.lines
     }
 
@@ -66,8 +66,9 @@ struct LineStreamReaderTests {
         let (pipe, reader, collector) = makeReader()
         try pipe.fileHandleForWriting.write(contentsOf: Data("one".utf8))
 
-        reader.finish()
-        reader.finish()
+        // Only the first call drains the pipe; the second must not repeat it.
+        collector.append(reader.finish())
+        collector.append(reader.finish())
 
         #expect(collector.lines == ["one"])
     }
@@ -93,7 +94,21 @@ struct LineStreamReaderTests {
             try await Task.sleep(for: .milliseconds(10))
         }
 
-        reader.finish()
+        // EOF already streamed both lines, so the tail is empty — but the
+        // reader must still be finishable without repeating anything.
+        collector.append(reader.finish())
         #expect(collector.lines == ["Привет", "мир"])
+    }
+
+    /// The tail returned by `finish()` is what the runner delivers together
+    /// with the completion callback, so it must contain every buffered line.
+    @Test func finishReturnsTheTailInsteadOfStreamingIt() throws {
+        let (pipe, reader, collector) = makeReader()
+        try pipe.fileHandleForWriting.write(contentsOf: Data("one\ntwo".utf8))
+
+        let tail = reader.finish()
+
+        #expect(tail == ["one", "two"])
+        #expect(collector.lines.isEmpty)
     }
 }

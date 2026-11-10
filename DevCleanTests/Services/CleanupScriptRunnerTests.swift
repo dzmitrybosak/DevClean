@@ -126,6 +126,21 @@ struct CleanupScriptRunnerTests {
         #expect(lines == ["ARG:--execute", "ARG:--modules", "ARG:xcode,ai"])
     }
 
+    @Test func runsScriptWithoutExecutableBit() async throws {
+        let temp = try TempDirectory()
+        defer { temp.cleanUp() }
+
+        // bash gets the path as an argument, so the bundled resource needs
+        // neither an executable bit nor a working shebang.
+        let script = try temp.file("run.sh", contents: "#!/bin/sh\necho ok\n")
+        #expect(!FileManager.default.isExecutableFile(atPath: script.path))
+
+        let runner = ProcessCleanupScriptRunner(scriptLocator: StubScriptLocator(url: script))
+        let result = try await runAndWait(runner)
+
+        #expect(result.exitCode == 0)
+    }
+
     @Test func passesOnlyMinimalEnvironment() async throws {
         let (runner, temp) = try makeRunner(scriptContents: "#!/bin/sh\nenv\n")
         defer { temp.cleanUp() }

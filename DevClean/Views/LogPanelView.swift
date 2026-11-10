@@ -3,6 +3,13 @@ import SwiftUI
 struct LogPanelView: View {
     let viewModel: CleanupViewModel
 
+    /// Distance (in points) from the very bottom that still counts as "at the
+    /// end" of the log.
+    private static let bottomTolerance: CGFloat = 40
+
+    @State private var viewportHeight: CGFloat = 0
+    @State private var contentBottom: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -37,6 +44,8 @@ struct LogPanelView: View {
         .padding(.vertical, 8)
     }
 
+    /// Keeps the log pinned to the bottom only while the user has not scrolled
+    /// away from it, so reading older output is not interrupted.
     private var logScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -58,15 +67,58 @@ struct LogPanelView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(LogAnchor.bottom)
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(
+                                        key: ContentBottomKey.self,
+                                        value: geo.frame(in: .named(LogAnchor.space)).maxY
+                                    )
+                            }
+                        }
                 }
             }
+            .coordinateSpace(name: LogAnchor.space)
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .preference(key: ViewportHeightKey.self, value: geo.size.height)
+                }
+            }
+            .onPreferenceChange(ContentBottomKey.self) { contentBottom = $0 }
+            .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0 }
             .onChange(of: viewModel.logOutput) { _, _ in
+                guard isAtLogEnd else { return }
                 proxy.scrollTo(LogAnchor.bottom, anchor: .bottom)
             }
         }
     }
 
+    /// Bottom of the content within `viewportHeight + tolerance` of the
+    /// viewport bottom — i.e. the user is at (or near) the end, or the content
+    /// does not fill the viewport yet.
+    private var isAtLogEnd: Bool {
+        contentBottom <= viewportHeight + Self.bottomTolerance
+    }
+
     private enum LogAnchor {
         static let bottom = "log-bottom"
+        static let space = "log-space"
+    }
+}
+
+private struct ContentBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat { 0 }
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = min(value, nextValue())
+    }
+}
+
+private struct ViewportHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat { 0 }
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

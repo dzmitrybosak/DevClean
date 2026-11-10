@@ -19,7 +19,11 @@ struct CleanupActionsView: View {
             .buttonStyle(.borderedProminent)
             .tint(.red)
             .disabled(!viewModel.canClean)
-            .help("Clean the selected modules")
+            .help(
+                viewModel.isAnalysisPartial
+                    ? String(localized: "Run the analysis again to get complete results")
+                    : String(localized: "Clean the selected modules")
+            )
 
             if viewModel.isBusy {
                 runningIndicator
@@ -40,10 +44,12 @@ struct CleanupActionsView: View {
 
         ProgressView()
             .controlSize(.small)
+            .accessibilityHidden(true)
 
         Text(viewModel.runState.activeMode?.progressTitle ?? "")
             .font(.callout)
             .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
 
         Button("Cancel") {
             viewModel.cancel()

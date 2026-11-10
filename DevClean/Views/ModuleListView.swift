@@ -9,7 +9,7 @@ struct ModuleListView: View {
             Divider()
             moduleScrollView
         }
-        .frame(height: 350)
+        .frame(minHeight: 180, idealHeight: 350, maxHeight: 520)
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
         .overlay {
@@ -25,9 +25,17 @@ struct ModuleListView: View {
             if viewModel.isAnalyzing {
                 ProgressView()
                     .controlSize(.small)
+                    .accessibilityLabel("Scanning caches…")
             }
             Spacer()
-            if !viewModel.modules.isEmpty {
+            if viewModel.isAnalysisPartial {
+                Label(
+                    "Analysis was interrupted — results are incomplete",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            } else if !viewModel.modules.isEmpty {
                 Text("Click a module to exclude it from cleaning")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -63,6 +71,7 @@ struct ModuleListView: View {
         VStack(spacing: 8) {
             if viewModel.isBusy {
                 ProgressView()
+                    .accessibilityHidden(true)
                 Text("Scanning caches…")
                     .foregroundStyle(.secondary)
             } else {
@@ -96,7 +105,7 @@ private struct ModuleRowView: View {
     var body: some View {
         Toggle(isOn: $isSelected) {
             HStack(spacing: 16) {
-                Text(module.name)
+                Text(module.displayName)
                 Spacer(minLength: 12)
                 Text(module.sizeBytes.byteCountFormatted)
                     .font(.system(.body, design: .monospaced))

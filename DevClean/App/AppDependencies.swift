@@ -7,13 +7,16 @@ struct AppDependencies {
     let outputParser: CleanupOutputParsing
     let clipboard: ClipboardWriting
     let makeScriptRunner: () -> CleanupScriptRunning
+    /// Tests and previews must not spawn an analysis just by appearing.
+    let startsAnalysisAutomatically: Bool
 
     static let live = AppDependencies(
         outputParser: CleanupOutputParser(),
         clipboard: PasteboardClipboard(),
         makeScriptRunner: {
             ProcessCleanupScriptRunner(scriptLocator: BundleScriptLocator())
-        }
+        },
+        startsAnalysisAutomatically: !ProcessInfo.processInfo.isRunningTests
     )
 
     #if DEBUG
@@ -21,7 +24,8 @@ struct AppDependencies {
     static let preview = AppDependencies(
         outputParser: CleanupOutputParser(),
         clipboard: PasteboardClipboard(),
-        makeScriptRunner: { PreviewScriptRunner() }
+        makeScriptRunner: { PreviewScriptRunner() },
+        startsAnalysisAutomatically: false
     )
     #endif
 
@@ -29,7 +33,8 @@ struct AppDependencies {
         CleanupViewModel(
             scriptRunner: makeScriptRunner(),
             outputParser: outputParser,
-            clipboard: clipboard
+            clipboard: clipboard,
+            startsAnalysisAutomatically: startsAnalysisAutomatically
         )
     }
 }

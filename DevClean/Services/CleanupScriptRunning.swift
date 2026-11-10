@@ -11,7 +11,7 @@ protocol CleanupScriptRunning: AnyObject {
     func cancel()
 }
 
-/// Runs `clean-dev-cache.sh` with `/bin/zsh` and streams its output.
+/// Runs `clean-dev-cache.sh` through `/bin/bash` and streams its output.
 ///
 /// The app is not sandboxed, so the script can touch `~/Library` caches.
 @MainActor
@@ -52,12 +52,15 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
         wasCancelled = false
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 
-        // The script path is passed as `$0`, never interpolated into the shell
-        // command string: a bundle living in a directory whose name contains
-        // `"`, `$()` or backticks must not become executable code.
-        var arguments = ["-c", "\"$0\" \"$@\"", scriptURL.path]
+        // Run the script as bash's own argument list: no intermediate shell
+        // parses the command, so a bundle living in a directory whose name
+        // contains `"`, `$()` or backticks can never become executable code.
+        // It also means neither the executable bit nor the shebang of the
+        // bundled resource matters — the test harness invokes it the same way.
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+
+        var arguments = [scriptURL.path]
         arguments.append(mode == .execute ? "--execute" : "--analyze")
         arguments.append("--modules")
         arguments.append(moduleIDs.joined(separator: ","))
@@ -91,14 +94,19 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
 
         process.terminationHandler = { [weak self] finishedProcess in
             // Drain the tails of both pipes before reporting the exit code.
-            stdoutReader.finish()
-            stderrReader.finish()
+            let tailLines = stdoutReader.finish() + stderrReader.finish()
 
             let status = finishedProcess.terminationStatus
             let reason = finishedProcess.terminationReason
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // The tail is delivered in the same MainActor turn as the
+                // completion callback, so the last lines can never be appended
+                // to the log of the run that follows this one.
+                for line in tailLines {
+                    onLine(line)
+                }
                 let result = CleanupRunResult(
                     exitCode: status,
                     terminationReason: reason,
@@ -112,8 +120,8 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
         do {
             try process.run()
         } catch {
-            stdoutReader.finish()
-            stderrReader.finish()
+            _ = stdoutReader.finish()
+            _ = stderrReader.finish()
             resetProcess()
             throw error
         }
@@ -136,6 +144,9 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
     }
 
     private func startTimeout(for process: Process, onLine: @escaping @MainActor (String) -> Void) {
+        // Captured by value: the closure must not reach for `self` before the
+        // `weak` capture is resolved (and the value never changes anyway).
+        let timeout = self.timeout
         timeoutTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: timeout)
             guard let self, self.process === process, process.isRunning else { return }

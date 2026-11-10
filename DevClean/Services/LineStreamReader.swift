@@ -22,21 +22,23 @@ nonisolated final class LineStreamReader: @unchecked Sendable {
         }
     }
 
-    /// Stops streaming, emits any buffered text without a trailing newline,
-    /// and closes the reading end of the pipe.
-    func finish() {
+    /// Stops streaming, drains the bytes that are already available (never
+    /// waiting for EOF: after a cancellation a grandchild may still hold the
+    /// write end open), closes the reading end and returns the buffered text,
+    /// including a trailing line without a newline.
+    ///
+    /// The tail is *returned*, not delivered: at termination the caller must
+    /// hand it over in the same MainActor turn as the completion callback.
+    func finish() -> [String] {
         lock.lock()
         guard !finished else {
             lock.unlock()
-            handle.closeFile()
-            return
+            closeHandle()
+            return []
         }
         finished = true
         handle.readabilityHandler = nil
 
-        // Never wait for EOF here: after a cancellation a grandchild process
-        // may still hold the write end of the pipe open. Drain only the bytes
-        // that are already available, non-blocking.
         let descriptor = handle.fileDescriptor
         let flags = fcntl(descriptor, F_GETFL)
         if flags != -1 {
@@ -53,10 +55,14 @@ nonisolated final class LineStreamReader: @unchecked Sendable {
         let tailLines = takeCompleteLines(emitRemainder: true)
         lock.unlock()
 
-        handle.closeFile()
-        if !tailLines.isEmpty {
-            onLines(tailLines)
-        }
+        closeHandle()
+        return tailLines
+    }
+
+    /// `close()` throws instead of crashing, so a double close — the EOF path
+    /// already marked the reader finished — is harmless.
+    private func closeHandle() {
+        try? handle.close()
     }
 
     private func readAvailable(from handle: FileHandle) {

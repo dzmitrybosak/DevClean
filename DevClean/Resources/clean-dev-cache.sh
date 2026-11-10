@@ -26,8 +26,18 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# Exact membership test: the module list is a CSV of identifiers, and no
+# shell pattern matching (a module id containing glob characters would
+# otherwise match a substring).
 selected() {
-  case ",${MODULES_CSV}," in *",$1,"*) return 0;; *) return 1;; esac
+  local rest="$MODULES_CSV" id
+  while [ -n "$rest" ]; do
+    id="${rest%%,*}"
+    [ "$id" = "$1" ] && return 0
+    [ "$id" = "$rest" ] && break
+    rest="${rest#*,}"
+  done
+  return 1
 }
 
 is_module() {
@@ -63,18 +73,21 @@ done
 ERRORS=0
 
 # Delete a directory, but never the bundle that contains this script.
+# `-L` keeps broken symlinks visible: `[ -e ]` alone is false for them, so a
+# dangling link would silently survive (or be skipped while walking).
 remove_keeping_self() {
   local dir="$1" child
-  [ -e "$dir" ] || return 0
+  [ -e "$dir" ] || [ -L "$dir" ] || return 0
   case "$KEEP_PATH" in
     "$dir")   return 0 ;;                 # this dir is the bundle: keep it
     "$dir"/*) ;;                          # bundle lives below: descend
     *)        rm -rf "$dir" 2>/dev/null || ERRORS=$((ERRORS + 1)); return 0 ;;
   esac
   for child in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
-    [ -e "$child" ] || continue
+    [ -e "$child" ] || [ -L "$child" ] || continue
     remove_keeping_self "$child"
   done
+  return 0
 }
 
 # macOS ships bash 3.2, which has no associative arrays, so per-module totals
@@ -134,12 +147,13 @@ handle_dir() {
   local module="$1" desc="$2" target="$3"
   if [ ! -e "$target" ]; then
     printf "  %-50s %s\n" "$desc" "(not found)"
-    return
+    return 0
   fi
   local b; b=$(dir_bytes "$target")
   add_total "$module" "$b"
   printf "  %-50s %s\n" "$desc" "$(human_bytes "$b")"
   [ "$MODE" = "execute" ] && remove_keeping_self "$target"
+  return 0
 }
 
 handle_cmd() {
@@ -152,7 +166,17 @@ handle_cmd() {
   else
     printf "  %-50s %s\n" "$desc" "(no size)"
   fi
-  [ "$MODE" = "execute" ] && { "$@" >/dev/null 2>&1 || { echo "    (command failed)"; ERRORS=$((ERRORS + 1)); }; }
+  if [ "$MODE" = "execute" ]; then
+    # The command's output is indented before it reaches the log, so a
+    # misbehaving command cannot forge `@@MODULE`/`@@DONE` protocol lines.
+    if "$@" 2>&1 | sed 's/^/    /'; then
+      :
+    else
+      echo "    (command failed)"
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
+  return 0
 }
 
 emit() {
@@ -276,7 +300,10 @@ if selected docker; then
   # Only build cache and unused images. Volumes are deliberately left alone:
   # `--volumes` would delete user data (databases, state) of stopped containers.
   # Never delete Docker.raw itself — it is the VM disk, not a cache file.
-  handle_cmd docker "Docker build cache" "$HOME/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw" docker builder prune -af
+  # Its size is not reported either: pruning does not shrink Docker.raw, so a
+  # measured size would promise space that cleaning cannot free.
+  echo "  Note: Docker.raw is not measured — pruning does not shrink the VM disk."
+  handle_cmd docker "Docker build cache (Docker.raw not affected)" "" docker builder prune -af
   handle_cmd docker "Docker unused images" "" docker image prune -af
   end_module docker
 fi

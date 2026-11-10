@@ -4,11 +4,19 @@ import Foundation
 struct CleanupModuleDefinition: Identifiable, Hashable, Sendable {
     let id: String
     let name: String
+    /// Localized variant of `name` shown in the UI; `nil` keeps `name`.
+    let localizedName: String?
     let isSelectedByDefault: Bool
 
-    init(id: String, name: String, isSelectedByDefault: Bool = true) {
+    init(
+        id: String,
+        name: String,
+        localizedName: String? = nil,
+        isSelectedByDefault: Bool = true
+    ) {
         self.id = id
         self.name = name
+        self.localizedName = localizedName
         self.isSelectedByDefault = isSelectedByDefault
     }
 }
@@ -19,17 +27,17 @@ struct CleanupModuleDefinition: Identifiable, Hashable, Sendable {
 /// Keep the identifiers in sync with `clean-dev-cache.sh`.
 enum CleanupModuleCatalog {
     static let all: [CleanupModuleDefinition] = [
-        CleanupModuleDefinition(id: "xcode", name: "Xcode & iOS"),
+        CleanupModuleDefinition(id: "xcode", name: "Xcode & iOS", localizedName: String(localized: "Xcode & iOS")),
         // Archives are useful for symbolication and erasing simulators destroys
         // their data, so both modules are opt-in.
-        CleanupModuleDefinition(id: "xcode-archives", name: "Xcode Archives", isSelectedByDefault: false),
-        CleanupModuleDefinition(id: "xcode-simulators", name: "Simulator data (erase all)", isSelectedByDefault: false),
-        CleanupModuleDefinition(id: "swiftpm", name: "SwiftPM"),
-        CleanupModuleDefinition(id: "cocoapods", name: "CocoaPods"),
-        CleanupModuleDefinition(id: "carthage", name: "Carthage"),
-        CleanupModuleDefinition(id: "packages", name: "Package managers"),
-        CleanupModuleDefinition(id: "ai", name: "AI agents"),
-        CleanupModuleDefinition(id: "docker", name: "Docker", isSelectedByDefault: false),
+        CleanupModuleDefinition(id: "xcode-archives", name: "Xcode Archives", localizedName: String(localized: "Xcode Archives"), isSelectedByDefault: false),
+        CleanupModuleDefinition(id: "xcode-simulators", name: "Simulator data (erase all)", localizedName: String(localized: "Simulator data (erase all)"), isSelectedByDefault: false),
+        CleanupModuleDefinition(id: "swiftpm", name: "SwiftPM", localizedName: String(localized: "SwiftPM")),
+        CleanupModuleDefinition(id: "cocoapods", name: "CocoaPods", localizedName: String(localized: "CocoaPods")),
+        CleanupModuleDefinition(id: "carthage", name: "Carthage", localizedName: String(localized: "Carthage")),
+        CleanupModuleDefinition(id: "packages", name: "Package managers", localizedName: String(localized: "Package managers")),
+        CleanupModuleDefinition(id: "ai", name: "AI agents", localizedName: String(localized: "AI agents")),
+        CleanupModuleDefinition(id: "docker", name: "Docker", localizedName: String(localized: "Docker"), isSelectedByDefault: false),
     ]
 
     static let allIDs: [String] = all.map(\.id)

@@ -62,9 +62,12 @@ open .build/Build/Products/Release/DevClean.app
    `--execute --modules id1,id2,...` только для отмеченных.
 5. Во время работы видны `ProgressView` и кнопка **Отмена** (SIGTERM). После успешной
    очистки автоматически запускается новый анализ, поэтому размеры на экране
-   обновляются (у очищенных модулей — около нуля).
+   обновляются (у очищенных модулей — около нуля; у `docker` размер не уменьшается,
+   см. таблицу ниже).
 6. Если отменить очистку, список модулей и их размеры остаются на месте — можно
    повторить попытку или пересканировать.
+7. Если отменить анализ, список остаётся неполным: очистка блокируется до
+   пересканирования (в заголовке списка появляется предупреждение).
 
 ### Модули
 
@@ -78,7 +81,7 @@ open .build/Build/Products/Release/DevClean.app
 | `carthage` | Carthage | `~/Library/Caches/org.carthage.CarthageKit`, `~/Library/Caches/carthage` |
 | `packages` | Package managers | Homebrew, npm, yarn, pnpm, Gradle, pip, uv, Go build cache |
 | `ai` | AI agents | Кэши Claude Desktop/Code, ChatGPT, OpenCode, MiMo Code и Xiaomi MiMo AI |
-| `docker` | Docker | `docker builder prune -af`, `docker image prune -af`; размер оценивается по `Docker.raw` |
+| `docker` | Docker | `docker builder prune -af`, `docker image prune -af`; размер неизвестен до очистки (`Docker.raw` не уменьшается при prune) |
 
 ### Что чистит модуль `ai`
 
@@ -144,32 +147,25 @@ DevClean/clean-dev-cache.sh --execute --modules xcode
 (`declare -A`, требующие bash 4) не используются, поэтому `#!/usr/bin/env bash`
 работает без установки Homebrew bash.
 
-## Архитектура
-
-| Файл | Назначение |
-| --- | --- |
-| `DevClean/DevCleanApp.swift` | `@main`, `WindowGroup`, минимальный размер окна |
-| `DevClean/ContentView.swift` | Заголовок, список модулей, кнопки, подтверждение, журнал |
-| `DevClean/CleanupModel.swift` | `@MainActor ObservableObject`: Process, Pipe, парсер `@@MODULE`, автоанализ |
-| `DevClean/CleanupModule.swift` | `Identifiable`-модель модуля |
-| `DevClean/clean-dev-cache.sh` | Bash-скрипт, копируется в `Contents/Resources` |
-
-Технические решения:
+## Технические решения
 
 - **PATH.** GUI-приложения не наследуют PATH из `.zshrc`, поэтому в
   `Process.environment` явно задан
   `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`.
-- **Запуск.** `Process` запускает `/bin/zsh -c "\"<scriptPath>\" \"$@\"" devclean ...flags`.
-  Это не требует executable-бита у ресурса в бандле, а `"$@"` передаёт каждый флаг
-  отдельным аргументом. Скрипт лежит в бандле с правами `755`.
+- **Запуск.** `Process` запускает `/bin/bash <путьКСкрипту> --analyze|--execute
+  --modules id1,id2,…`: путь к скрипту передаётся как argv, без промежуточного
+  шелла и без интерполяции, поэтому спецсимволы в пути безопасны. Executable-бит
+  и валидный shebang не требуются — bash получает путь аргументом.
 - **Стриминг.** stdout и stderr читаются независимо через `Pipe` +
   `FileHandle.readabilityHandler`; данные буферизуются до целых строк на уровне байтов,
   поэтому многобайтовые UTF-8 символы и строка `@@MODULE|...` не рвутся между чанками.
-  Все обновления `@Published` выполняются на `@MainActor`.
+  Хвостовой вывод дописывается в том же MainActor-джобе, что и результат завершения;
+  все обновления состояния выполняются на `@MainActor`.
 - **Завершение.** `terminationHandler` дожидается остатков вывода (неблокирующее
   чтение, чтобы зависший дочерний процесс не блокировал UI), печатает код выхода
   и сбрасывает состояние. После успешного `--execute` вызывается `analyze()`.
-- **Отмена.** `process.terminate()` (SIGTERM), через 3 секунды — SIGKILL, если процесс
+- **Отмена.** Сигнал `SIGTERM` отправляется в группу процессов напрямую
+  (`killpg`, если процесс — лидер группы), через 3 секунды — `SIGKILL`, если процесс
   не завершился. После отмены автоматический повторный анализ не запускается.
 
 ## Тесты

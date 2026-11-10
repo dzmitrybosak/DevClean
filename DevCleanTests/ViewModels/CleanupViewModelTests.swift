@@ -253,10 +253,68 @@ struct CleanupViewModelTests {
         let message = viewModel.confirmationMessage
 
         // Only data from the module list is asserted: the surrounding text is
-        // localized and must not make this test locale-dependent.
+        // localized and must not make this test locale-dependent. Module names
+        // are localized on the display side too, so the expectation goes
+        // through the same lookup.
         #expect(!message.isEmpty)
-        #expect(message.contains("Xcode & iOS"))
+        #expect(message.contains(String(localized: "Xcode & iOS")))
         #expect(message.contains(Int64(2048).byteCountFormatted))
         #expect(!message.contains("Docker"))
+    }
+
+    // MARK: - Partial analysis
+
+    @Test func cancelledAnalysisBlocksCleaningUntilRescanned() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.emit("@@MODULE|ai|AI agents|1")
+
+        runner.finish(exitCode: 15, reason: .uncaughtSignal, wasCancelled: true)
+
+        #expect(viewModel.isAnalysisPartial)
+        #expect(!viewModel.canClean)
+        // The partial list stays visible…
+        #expect(viewModel.modules.map(\.id) == ["ai"])
+
+        // …until a fresh analysis starts, which resets the flag.
+        viewModel.analyze()
+        #expect(!viewModel.isAnalysisPartial)
+        #expect(viewModel.modules.isEmpty)
+    }
+
+    @Test func failedAnalysisBlocksCleaning() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.emit("@@MODULE|ai|AI agents|1")
+
+        runner.finish(exitCode: 1)
+
+        #expect(viewModel.isAnalysisPartial)
+        #expect(!viewModel.canClean)
+    }
+
+    @Test func launchErrorDuringAnalysisMarksResultsPartial() {
+        let (viewModel, runner, _) = makeViewModel()
+        runner.runError = ScriptLocationError.missingFromBundle(name: "clean-dev-cache", fileExtension: "sh")
+
+        viewModel.analyze()
+
+        #expect(viewModel.isAnalysisPartial)
+        #expect(!viewModel.canClean)
+    }
+
+    @Test func linesArrivingAfterANewRunStartedAreIgnored() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        let staleHandler = runner.currentLineHandler()
+
+        // Finish the analysis, start a cleanup, then deliver a line that
+        // belongs to the first (already finished) run.
+        runner.emit("@@MODULE|ai|AI agents|1")
+        runner.finish(exitCode: 0)
+        viewModel.cleanSelected()
+        staleHandler?("stale line")
+
+        #expect(!viewModel.logOutput.contains("stale line"))
     }
 }

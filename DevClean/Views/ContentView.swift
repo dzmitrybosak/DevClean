@@ -8,18 +8,22 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             CleanupHeaderView(viewModel: viewModel)
-            ModuleListView(viewModel: viewModel)
-            CleanupActionsView(viewModel: viewModel) {
-                isShowingCleanConfirmation = true
+            VSplitView {
+                ModuleListView(viewModel: viewModel)
+                VStack(spacing: 14) {
+                    CleanupActionsView(viewModel: viewModel) {
+                        isShowingCleanConfirmation = true
+                    }
+                    .padding(.top)
+                    LogPanelView(viewModel: viewModel)
+                        .frame(minHeight: 160)
+                }
             }
-            LogPanelView(viewModel: viewModel)
         }
         .padding(20)
         .frame(minWidth: 700, minHeight: 600)
         .onAppear {
-            if !ProcessInfo.processInfo.isRunningTests {
-                viewModel.startIfNeeded()
-            }
+            viewModel.startIfNeeded()
         }
         .confirmationDialog(
             "Clean the selected modules?",
