@@ -1,6 +1,39 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    ">>> Cancellation: SIGTERM sent…" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Отмена: отправлен SIGTERM…"
+          }
+        }
+      }
+    },
+    ">>> The process finished. Exit code: %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Процесс завершён. Код выхода: %lld"
+          }
+        }
+      }
+    },
+    ">>> The process was interrupted by a signal (code %lld)." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>> Процесс прерван сигналом (код %lld)."
+          }
+        }
+      }
+    },
+    ">>> Timeout: stopping the process…" : {
+
+    },
     "Analyzing…" : {
       "localizations" : {
         "ru" : {
@@ -71,22 +104,22 @@
         }
       }
     },
-    "Click a module to exclude it from cleaning" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Нажмите, чтобы исключить модуль из очистки"
-          }
-        }
-      }
-    },
     "Click “Rescan” to run the analysis again." : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Нажмите «Пересканировать», чтобы повторить анализ."
+          }
+        }
+      }
+    },
+    "Click a module to exclude it from cleaning" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите, чтобы исключить модуль из очистки"
           }
         }
       }
@@ -277,36 +310,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "файл скрипта недоступен:\n%@\nБандл приложения был удалён (скорее всего, очисткой DerivedData, в которой он лежит). Пересоберите проект (⌘R)."
-          }
-        }
-      }
-    },
-    ">>> Cancellation: SIGTERM sent…" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : ">>> Отмена: отправлен SIGTERM…"
-          }
-        }
-      }
-    },
-    ">>> The process finished. Exit code: %lld" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : ">>> Процесс завершён. Код выхода: %lld"
-          }
-        }
-      }
-    },
-    ">>> The process was interrupted by a signal (code %lld)." : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : ">>> Процесс прерван сигналом (код %lld)."
           }
         }
       }

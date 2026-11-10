@@ -20,15 +20,24 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
     private static let searchPath =
         "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+    /// Hard limit so a hung child (`pod`, `docker`, `simctl`) cannot keep the
+    /// app busy forever. The user can still cancel earlier.
+    private let timeout: Duration
+
     private let scriptLocator: ScriptLocating
 
     private var process: Process?
     private var stdoutReader: LineStreamReader?
     private var stderrReader: LineStreamReader?
+    private var timeoutTask: Task<Void, Never>?
     private var wasCancelled = false
 
-    init(scriptLocator: ScriptLocating) {
+    init(
+        scriptLocator: ScriptLocating,
+        timeout: Duration = .seconds(30 * 60)
+    ) {
         self.scriptLocator = scriptLocator
+        self.timeout = timeout
     }
 
     func run(
@@ -45,17 +54,24 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 
-        // `"$@"` forwards each following argument as a separate positional
-        // parameter, so module lists never need shell quoting.
-        var arguments = ["-c", "\"\(scriptURL.path)\" \"$@\"", "devcachecleaner"]
+        // The script path is passed as `$0`, never interpolated into the shell
+        // command string: a bundle living in a directory whose name contains
+        // `"`, `$()` or backticks must not become executable code.
+        var arguments = ["-c", "\"$0\" \"$@\"", scriptURL.path]
         arguments.append(mode == .execute ? "--execute" : "--analyze")
         arguments.append("--modules")
         arguments.append(moduleIDs.joined(separator: ","))
         process.arguments = arguments
 
-        var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = Self.searchPath
-        process.environment = environment
+        // Pass a minimal environment: the inherited one may carry tokens,
+        // DYLD_* overrides or CI secrets that the child does not need.
+        process.environment = [
+            "PATH": Self.searchPath,
+            "HOME": NSHomeDirectory(),
+            "USER": NSUserName(),
+            "LANG": "en_US.UTF-8",
+            "TMPDIR": NSTemporaryDirectory(),
+        ]
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -101,12 +117,48 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
             resetProcess()
             throw error
         }
+
+        startTimeout(for: process, onLine: onLine)
     }
 
     func cancel() {
         guard let process, process.isRunning else { return }
         wasCancelled = true
-        process.terminate()
+        signalProcess(process, SIGTERM)
+
+        // Escalate if the script (or a child holding the process alive) ignores
+        // SIGTERM, so the UI does not stay stuck in the running state.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, self.process === process, process.isRunning else { return }
+            self.signalProcess(process, SIGKILL)
+        }
+    }
+
+    private func startTimeout(for process: Process, onLine: @escaping @MainActor (String) -> Void) {
+        timeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard let self, self.process === process, process.isRunning else { return }
+            onLine(String(localized: ">>> Timeout: stopping the process…"))
+            self.signalProcess(process, SIGTERM)
+            try? await Task.sleep(for: .seconds(3))
+            if self.process === process, process.isRunning {
+                self.signalProcess(process, SIGKILL)
+            }
+        }
+    }
+
+    /// Signals the child, and its whole process group when it leads one.
+    ///
+    /// A negative PID is only used after confirming that the child is a group
+    /// leader — otherwise `kill(-pid)` could signal this app's own group.
+    private func signalProcess(_ process: Process, _ signal: Int32) {
+        let pid = process.processIdentifier
+        if getpgid(pid) == pid {
+            kill(-pid, signal)
+        } else {
+            kill(pid, signal)
+        }
     }
 
     private func makeReader(
@@ -123,6 +175,8 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
     }
 
     private func resetProcess() {
+        timeoutTask?.cancel()
+        timeoutTask = nil
         process = nil
         stdoutReader = nil
         stderrReader = nil

@@ -17,7 +17,9 @@ struct ContentView: View {
         .padding(20)
         .frame(minWidth: 700, minHeight: 600)
         .onAppear {
-            viewModel.startIfNeeded()
+            if !ProcessInfo.processInfo.isRunningTests {
+                viewModel.startIfNeeded()
+            }
         }
         .confirmationDialog(
             "Clean the selected modules?",

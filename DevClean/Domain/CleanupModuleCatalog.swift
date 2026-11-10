@@ -29,7 +29,7 @@ enum CleanupModuleCatalog {
         CleanupModuleDefinition(id: "carthage", name: "Carthage"),
         CleanupModuleDefinition(id: "packages", name: "Package managers"),
         CleanupModuleDefinition(id: "ai", name: "AI agents"),
-        CleanupModuleDefinition(id: "docker", name: "Docker"),
+        CleanupModuleDefinition(id: "docker", name: "Docker", isSelectedByDefault: false),
     ]
 
     static let allIDs: [String] = all.map(\.id)

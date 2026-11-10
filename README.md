@@ -55,8 +55,8 @@ open .build/Build/Products/Release/DevClean.app
 2. Скрипт завершает каждую секцию строкой `@@MODULE|id|name|bytes`. Приложение
    перехватывает эти строки, добавляет модуль в список и показывает размер через
    `ByteCountFormatter` (стиль `.file`). В журнал служебные строки `@@...` не попадают.
-3. По умолчанию отмечены 7 модулей из 9. **Xcode Archives** и
-   **Simulator data (erase all)** не отмечены — см. ниже.
+3. По умолчанию отмечены 6 модулей из 9. **Xcode Archives**, **Simulator data (erase all)**
+   и **Docker** не отмечены — см. ниже.
 4. **Пересканировать** повторяет анализ. **Очистить выбранное** показывает
    подтверждение со списком модулей и запускает
    `--execute --modules id1,id2,...` только для отмеченных.
@@ -78,7 +78,7 @@ open .build/Build/Products/Release/DevClean.app
 | `carthage` | Carthage | `~/Library/Caches/org.carthage.CarthageKit`, `~/Library/Caches/carthage` |
 | `packages` | Package managers | Homebrew, npm, yarn, pnpm, Gradle, pip, uv, Go build cache |
 | `ai` | AI agents | Кэши Claude Desktop/Code, ChatGPT, OpenCode, MiMo Code и Xiaomi MiMo AI |
-| `docker` | Docker | `docker system prune -af --volumes`; размер оценивается по `Docker.raw` |
+| `docker` | Docker | `docker builder prune -af`, `docker image prune -af`; размер оценивается по `Docker.raw` |
 
 ### Что чистит модуль `ai`
 
@@ -92,13 +92,14 @@ open .build/Build/Products/Release/DevClean.app
   `~/Library/Caches/com.openai.ChatGPT`
 - **OpenCode**: `~/Library/Caches/opencode`, `~/.cache/opencode`
 - **MiMo Code**: `~/.cache/mimocode`
-- **Xiaomi MiMo AI**: каталоги внутри `~/Library/Caches`, имя которых совпадает с
-  `*Xiaomi*` или `*mimo*` (регистр первой буквы не важен). Поиск по шаблону нужен,
-  потому что bundle id приложения может меняться.
+- **Xiaomi MiMo AI**: каталоги внутри `~/Library/Caches`, имя которых начинается
+  с `com.xiaomi` или `com.mimo` (регистр не важен). Поиск по шаблону нужен,
+  потому что bundle id приложения может меняться; `find --print0` корректно
+  обрабатывает пробелы в путях.
 
 Отсутствующие пути пропускаются и показываются в журнале как `(not found)`.
 
-### Почему `xcode-archives` и `xcode-simulators` по умолчанию выключены
+### Почему `xcode-archives`, `xcode-simulators` и `docker` по умолчанию выключены
 
 Архивы Xcode (`.xcarchive`) содержат dSYM и бинарники прошлых сборок. Они нужны для
 символизации крашей и иногда для повторной подписи/экспорта сборки. Это не «мусор»,
@@ -107,11 +108,18 @@ open .build/Build/Products/Release/DevClean.app
 `xcode-simulators` тоже требует осознанного выбора: `simctl erase all` стирает данные
 всех симуляторов, а не только кэши.
 
+`docker` выключен, потому что очистка Docker затрагивает общие ресурсы демона, а не
+только кэш текущего проекта. Модуль удаляет build cache и неиспользуемые образы;
+**тома (volumes) не трогаются** — в них часто лежат базы данных и состояние
+остановленных контейнеров.
+
 ## App Sandbox
 
 Sandbox **отключён** в проекте (`ENABLE_APP_SANDBOX = NO`), иначе процесс не получит
 доступ к `~/Library/Developer/...`, `~/Library/Caches/...` и домашним каталогам
-менеджеров пакетов.
+менеджеров пакетов. При этом **Hardened Runtime включён** (`ENABLE_HARDENED_RUNTIME = YES`);
+он применяется к сборкам с нормальной подписью (ad-hoc подпись из примера выше
+отключает его — это ограничение ad-hoc, а не настройки проекта).
 
 Если включаете настройку заново или создаёте target с нуля:
 
@@ -161,5 +169,17 @@ DevClean/clean-dev-cache.sh --execute --modules xcode
 - **Завершение.** `terminationHandler` дожидается остатков вывода (неблокирующее
   чтение, чтобы зависший дочерний процесс не блокировал UI), печатает код выхода
   и сбрасывает состояние. После успешного `--execute` вызывается `analyze()`.
-- **Отмена.** `process.terminate()` (SIGTERM). Автоматический повторный анализ после
-  отмены не запускается.
+- **Отмена.** `process.terminate()` (SIGTERM), через 3 секунды — SIGKILL, если процесс
+  не завершился. После отмены автоматический повторный анализ не запускается.
+
+## Тесты
+
+Юнит-тесты покрывают парсер вывода, каталог модулей, состояние запуска, ViewModel,
+построчное чтение, запуск процесса и сам bash-скрипт (в изолированном временном `HOME`).
+
+```bash
+xcodebuild test -scheme DevClean -destination 'platform=macOS' -derivedDataPath .build
+```
+
+Тесты не обращаются к реальному домашнему каталогу, а `docker` и `xcrun` подменяются
+шим-скриптами, поэтому реальные образы и симуляторы не затрагиваются.

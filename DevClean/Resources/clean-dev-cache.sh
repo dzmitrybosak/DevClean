@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
+# Never operate on a relative/empty home: with HOME="" every "$HOME/..."
+# path becomes an absolute system path such as /Library/...
+if [ -z "${HOME:-}" ] || [ "${HOME}" = "/" ]; then
+  echo "Refusing to run: HOME is empty or '/'" >&2
+  exit 2
+fi
+
 # Single source of truth for the modules handled by this script. The order is
 # meaningful: totals are emitted in this order. Keep in sync with
 # CleanupModuleCatalog.swift.
@@ -51,6 +58,10 @@ while [ -n "$_probe" ]; do
   _probe="${_probe%/*}"
 done
 
+# Incremented whenever a deletion or cleanup command fails, so the caller can
+# report a non-zero exit code instead of a misleading "success".
+ERRORS=0
+
 # Delete a directory, but never the bundle that contains this script.
 remove_keeping_self() {
   local dir="$1" child
@@ -58,7 +69,7 @@ remove_keeping_self() {
   case "$KEEP_PATH" in
     "$dir")   return 0 ;;                 # this dir is the bundle: keep it
     "$dir"/*) ;;                          # bundle lives below: descend
-    *)        rm -rf "$dir" 2>/dev/null; return 0 ;;
+    *)        rm -rf "$dir" 2>/dev/null || ERRORS=$((ERRORS + 1)); return 0 ;;
   esac
   for child in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [ -e "$child" ] || continue
@@ -141,7 +152,7 @@ handle_cmd() {
   else
     printf "  %-50s %s\n" "$desc" "(no size)"
   fi
-  [ "$MODE" = "execute" ] && { "$@" >/dev/null 2>&1 || echo "    (command failed)"; }
+  [ "$MODE" = "execute" ] && { "$@" >/dev/null 2>&1 || { echo "    (command failed)"; ERRORS=$((ERRORS + 1)); }; }
 }
 
 emit() {
@@ -180,18 +191,16 @@ handle_ai() {
   # MiMo Code
   handle_dir ai "MiMo Code cache" "$HOME/.cache/mimocode"
 
-  # Xiaomi MiMo AI (desktop): bundle ids may change, so match cache directory
-  # names by glob inside Caches only. Application Support is never touched.
-  local ai_seen="" d name
-  for d in "$HOME/Library/Caches"/*[Xx]iaomi* "$HOME/Library/Caches"/*[Mm]imo*; do
-    [ -d "$d" ] || continue
-    case "$ai_seen" in
-      *"|$d|"*) continue ;;
-    esac
-    ai_seen="$ai_seen|$d|"
+  # Xiaomi MiMo AI (desktop): bundle ids may change, so discover cache
+  # directories by a bundle-id-like prefix inside Caches only. Application
+  # Support is never touched, and unrelated names containing "mimo" are not
+  # matched. `find -print0` keeps paths with spaces intact.
+  local d name
+  while IFS= read -r -d '' d; do
     name=$(basename "$d")
     handle_dir ai "Xiaomi MiMo cache ($name)" "$d"
-  done
+  done < <(find "$HOME/Library/Caches" -maxdepth 1 -type d \
+             \( -iname 'com.xiaomi*' -o -iname 'com.mimo*' \) -print0 2>/dev/null)
 
   end_module ai
 }
@@ -264,8 +273,17 @@ fi
 
 if selected docker; then
   begin_module "Docker"
-  handle_cmd docker "Docker system prune" "$HOME/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw" docker system prune -af --volumes
+  # Only build cache and unused images. Volumes are deliberately left alone:
+  # `--volumes` would delete user data (databases, state) of stopped containers.
+  # Never delete Docker.raw itself — it is the VM disk, not a cache file.
+  handle_cmd docker "Docker build cache" "$HOME/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw" docker builder prune -af
+  handle_cmd docker "Docker unused images" "" docker image prune -af
   end_module docker
 fi
 
 echo "@@DONE"
+
+if [ "$ERRORS" -gt 0 ]; then
+  echo ">>> $ERRORS operation(s) failed." >&2
+  exit 1
+fi
