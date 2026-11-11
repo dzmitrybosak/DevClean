@@ -29,7 +29,7 @@ struct LogPanelView: View {
             Label("Log", systemImage: "terminal")
                 .font(.headline)
             Spacer()
-            if !viewModel.logOutput.isEmpty {
+            if !viewModel.logLines.isEmpty {
                 Button {
                     viewModel.copyLog()
                 } label: {
@@ -50,14 +50,14 @@ struct LogPanelView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if viewModel.logOutput.isEmpty {
+                    if viewModel.logLines.isEmpty {
                         Text("Script output will appear here…")
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(.tertiary)
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        Text(viewModel.logOutput)
+                        Text(attributedLog)
                             .font(.system(.body, design: .monospaced))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,11 +87,26 @@ struct LogPanelView: View {
             }
             .onPreferenceChange(ContentBottomKey.self) { contentBottom = $0 }
             .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0 }
-            .onChange(of: viewModel.logOutput) { _, _ in
+            .onChange(of: viewModel.logLines) { _, _ in
                 guard isAtLogEnd else { return }
                 proxy.scrollTo(LogAnchor.bottom, anchor: .bottom)
             }
         }
+    }
+
+    /// The full transcript as one selectable text, with stderr lines — the
+    /// script's error output — painted red so failures stand out at a glance.
+    private var attributedLog: AttributedString {
+        var attributed = AttributedString()
+        for line in viewModel.logLines {
+            var entry = AttributedString(line.text)
+            if line.isFromStderr {
+                entry.foregroundColor = .red
+            }
+            attributed += entry
+            attributed += AttributedString("\n")
+        }
+        return attributed
     }
 
     /// Bottom of the content within `viewportHeight + tolerance` of the

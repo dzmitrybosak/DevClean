@@ -7,11 +7,20 @@ import Testing
 struct CleanupScriptRunnerTests {
     // MARK: - Helpers
 
+    @MainActor
+    private struct StreamedLine: Equatable {
+        let text: String
+        let stream: CleanupOutputStream
+    }
+
+    /// Two helpers with the same name are needed: Swift cannot disambiguate a
+    /// closure argument like `{ lines.append($0) }` between the two handler
+    /// arities.
     private func runAndWait(
         _ runner: ProcessCleanupScriptRunner,
         mode: CleanupMode = .analyze,
         moduleIDs: [String] = [],
-        onLine: @escaping @MainActor (String) -> Void = { _ in }
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void
     ) async throws -> CleanupRunResult {
         try await withCheckedThrowingContinuation { continuation in
             do {
@@ -25,6 +34,20 @@ struct CleanupScriptRunnerTests {
                 continuation.resume(throwing: error)
             }
         }
+    }
+
+    private func runAndWait(
+        _ runner: ProcessCleanupScriptRunner,
+        mode: CleanupMode = .analyze,
+        moduleIDs: [String] = [],
+        onLine lineHandler: @escaping @MainActor (String) -> Void = { _ in }
+    ) async throws -> CleanupRunResult {
+        try await runAndWait(
+            runner,
+            mode: mode,
+            moduleIDs: moduleIDs,
+            onLine: { line, _ in lineHandler(line) }
+        )
     }
 
     private func makeRunner(
@@ -184,17 +207,18 @@ struct CleanupScriptRunnerTests {
         )
         defer { temp.cleanUp() }
 
-        var lines: [String] = []
-        _ = try await runAndWait(runner, onLine: { lines.append($0) })
+        var lines: [StreamedLine] = []
+        _ = try await runAndWait(runner, onLine: { lines.append(StreamedLine(text: $0, stream: $1)) })
 
-        #expect(Set(lines) == ["out", "err"])
+        #expect(lines.contains(StreamedLine(text: "out", stream: .stdout)))
+        #expect(lines.contains(StreamedLine(text: "err", stream: .stderr)))
     }
 
     @Test func throwingLocatorPropagatesError() {
         let runner = ProcessCleanupScriptRunner(scriptLocator: ThrowingScriptLocator())
 
         #expect(throws: ScriptLocationError.self) {
-            try runner.run(mode: .analyze, moduleIDs: [], onLine: { _ in }, onFinish: { _ in })
+            try runner.run(mode: .analyze, moduleIDs: [], onLine: { _, _ in }, onFinish: { _ in })
         }
     }
 
@@ -222,11 +246,12 @@ struct CleanupScriptRunnerTests {
         )
         defer { temp.cleanUp() }
 
-        var lines: [String] = []
-        let result = try await runAndWait(runner, onLine: { lines.append($0) })
+        var lines: [StreamedLine] = []
+        let result = try await runAndWait(runner, onLine: { lines.append(StreamedLine(text: $0, stream: $1)) })
 
         #expect(!result.wasCancelled)
-        #expect(lines.contains { $0.contains("Timeout") })
+        #expect(result.wasTimedOut)
+        #expect(lines.contains { $0.text.contains("Timeout") })
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -237,9 +262,9 @@ struct CleanupScriptRunnerTests {
         defer { temp.cleanUp() }
 
         try await confirmation("only the first run finishes", expectedCount: 1) { confirm in
-            try runner.run(mode: .analyze, moduleIDs: [], onLine: { _ in }, onFinish: { _ in confirm() })
+            try runner.run(mode: .analyze, moduleIDs: [], onLine: { _, _ in }, onFinish: { _ in confirm() })
             // The guard must ignore this call instead of replacing handlers.
-            try runner.run(mode: .analyze, moduleIDs: [], onLine: { _ in }, onFinish: { _ in confirm() })
+            try runner.run(mode: .analyze, moduleIDs: [], onLine: { _, _ in }, onFinish: { _ in confirm() })
             try await Task.sleep(for: .milliseconds(600))
         }
     }

@@ -15,13 +15,13 @@ final class FakeScriptRunner: CleanupScriptRunning {
     private(set) var cancelCallCount = 0
     var runError: Error?
 
-    private var lineHandler: (@MainActor (String) -> Void)?
+    private var lineHandler: (@MainActor (String, CleanupOutputStream) -> Void)?
     private var finishHandler: (@MainActor (CleanupRunResult) -> Void)?
 
     func run(
         mode: CleanupMode,
         moduleIDs: [String],
-        onLine: @escaping @MainActor (String) -> Void,
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void,
         onFinish: @escaping @MainActor (CleanupRunResult) -> Void
     ) throws {
         if let runError {
@@ -36,25 +36,27 @@ final class FakeScriptRunner: CleanupScriptRunning {
         cancelCallCount += 1
     }
 
-    func emit(_ line: String) {
-        lineHandler?(line)
+    func emit(_ line: String, on stream: CleanupOutputStream = .stdout) {
+        lineHandler?(line, stream)
     }
 
     /// The `onLine` handler registered by the most recent `run`, so a test can
     /// deliver a line "from another run" after a new one has started.
-    func currentLineHandler() -> (@MainActor (String) -> Void)? {
+    func currentLineHandler() -> (@MainActor (String, CleanupOutputStream) -> Void)? {
         lineHandler
     }
 
     func finish(
         exitCode: Int32 = 0,
         reason: Process.TerminationReason = .exit,
-        wasCancelled: Bool = false
+        wasCancelled: Bool = false,
+        wasTimedOut: Bool = false
     ) {
         let result = CleanupRunResult(
             exitCode: exitCode,
             terminationReason: reason,
-            wasCancelled: wasCancelled
+            wasCancelled: wasCancelled,
+            wasTimedOut: wasTimedOut
         )
         finishHandler?(result)
     }

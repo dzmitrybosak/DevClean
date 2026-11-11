@@ -45,7 +45,7 @@ private class PreviewScriptRunner: CleanupScriptRunning {
     func run(
         mode: CleanupMode,
         moduleIDs: [String],
-        onLine: @escaping @MainActor (String) -> Void,
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void,
         onFinish: @escaping @MainActor (CleanupRunResult) -> Void
     ) throws {
         onFinish(

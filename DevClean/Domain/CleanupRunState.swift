@@ -5,6 +5,21 @@ struct CleanupRunResult: Sendable {
     let exitCode: Int32
     let terminationReason: Process.TerminationReason
     let wasCancelled: Bool
+    /// `true` when the run hit the runner's hard timeout and was stopped
+    /// by it, rather than by the user or a crash.
+    let wasTimedOut: Bool
+
+    init(
+        exitCode: Int32,
+        terminationReason: Process.TerminationReason,
+        wasCancelled: Bool,
+        wasTimedOut: Bool = false
+    ) {
+        self.exitCode = exitCode
+        self.terminationReason = terminationReason
+        self.wasCancelled = wasCancelled
+        self.wasTimedOut = wasTimedOut
+    }
 
     var wasInterruptedBySignal: Bool {
         terminationReason == .uncaughtSignal

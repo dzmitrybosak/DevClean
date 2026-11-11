@@ -1,6 +1,13 @@
 import Foundation
 import Observation
 
+/// One line of the raw transcript with its origin, so the log panel can
+/// highlight error output without dropping anything from the copyable text.
+struct LogLine: Equatable, Sendable {
+    let text: String
+    let isFromStderr: Bool
+}
+
 /// Presentation state and intents of the cleanup screen.
 ///
 /// The view model owns UI state and orchestrates services; it knows nothing
@@ -10,11 +17,14 @@ import Observation
 final class CleanupViewModel {
     private(set) var modules: [CleanupModule] = []
     private(set) var selectedModuleIDs: Set<String> = []
-    private(set) var logOutput = ""
+    private(set) var logLines: [LogLine] = []
     private(set) var runState: CleanupRunState = .idle
     /// `true` when the last analysis did not run to completion, so the visible
     /// module list may be missing entries.
     private(set) var isAnalysisPartial = false
+    /// Human-readable classification of the last finished run (or launch
+    /// failure); `nil` while idle/running and cleared when a new run starts.
+    private(set) var lastIssue: CleanupRunIssue?
 
     @ObservationIgnored private let scriptRunner: CleanupScriptRunning
     @ObservationIgnored private let outputParser: CleanupOutputParsing
@@ -24,6 +34,8 @@ final class CleanupViewModel {
     /// Incremented on every run so lines and results of an older, still
     /// delivering run are ignored after a new one has begun.
     @ObservationIgnored private var runGeneration = 0
+    /// stderr lines of the current run, kept for issue classification.
+    @ObservationIgnored private var stderrLines: [String] = []
 
     init(
         scriptRunner: CleanupScriptRunning,
@@ -38,6 +50,12 @@ final class CleanupViewModel {
     }
 
     // MARK: - Derived state
+
+    /// The complete transcript — every stdout and stderr line — as plain text,
+    /// for the Copy button and for tests.
+    var logOutput: String {
+        logLines.reduce(into: "") { $0 += $1.text + "\n" }
+    }
 
     var isBusy: Bool {
         runState.isRunning
@@ -131,9 +149,9 @@ final class CleanupViewModel {
             try scriptRunner.run(
                 mode: mode,
                 moduleIDs: moduleIDs,
-                onLine: { [weak self] line in
+                onLine: { [weak self] line, stream in
                     guard let self, self.runGeneration == generation else { return }
-                    self.handle(line)
+                    self.handle(line, from: stream)
                 },
                 onFinish: { [weak self] result in
                     guard let self, self.runGeneration == generation else { return }
@@ -152,10 +170,19 @@ final class CleanupViewModel {
             } else {
                 log(String(localized: "Failed to launch the process: \(error.localizedDescription)"))
             }
+            lastIssue = .launchFailed(message: error.localizedDescription)
         }
     }
 
     private func finish(_ result: CleanupRunResult, mode: CleanupMode) {
+        lastIssue = CleanupRunIssue.classify(
+            exitCode: result.exitCode,
+            wasCancelled: result.wasCancelled,
+            wasTimedOut: result.wasTimedOut,
+            wasInterruptedBySignal: result.wasInterruptedBySignal,
+            stderrLines: stderrLines
+        )
+
         runState = .finished(
             mode: mode,
             exitCode: result.exitCode,
@@ -184,10 +211,14 @@ final class CleanupViewModel {
 
     // MARK: - Output handling
 
-    private func handle(_ line: String) {
+    private func handle(_ line: String, from stream: CleanupOutputStream) {
+        if stream == .stderr {
+            stderrLines.append(line)
+        }
+
         switch outputParser.event(for: line) {
         case .log(let text):
-            log(text)
+            log(text, from: stream)
         case .module(let module):
             upsert(module)
         case .done, .ignored:
@@ -217,11 +248,12 @@ final class CleanupViewModel {
             selectedModuleIDs = []
             isAnalysisPartial = false
         }
-        logOutput = ""
+        logLines = []
+        stderrLines = []
+        lastIssue = nil
     }
 
-    private func log(_ text: String) {
-        logOutput.append(text)
-        logOutput.append("\n")
+    private func log(_ text: String, from stream: CleanupOutputStream = .stdout) {
+        logLines.append(LogLine(text: text, isFromStderr: stream == .stderr))
     }
 }

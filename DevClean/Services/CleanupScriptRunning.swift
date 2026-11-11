@@ -4,7 +4,7 @@ protocol CleanupScriptRunning: AnyObject {
     func run(
         mode: CleanupMode,
         moduleIDs: [String],
-        onLine: @escaping @MainActor (String) -> Void,
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void,
         onFinish: @escaping @MainActor (CleanupRunResult) -> Void
     ) throws
 
@@ -31,6 +31,9 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
     private var stderrReader: LineStreamReader?
     private var timeoutTask: Task<Void, Never>?
     private var wasCancelled = false
+    /// Set by the timeout task before it signals the process, so the result
+    /// can distinguish a timeout from a user cancellation or a crash.
+    private var wasTimedOut = false
 
     init(
         scriptLocator: ScriptLocating,
@@ -43,13 +46,14 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
     func run(
         mode: CleanupMode,
         moduleIDs: [String],
-        onLine: @escaping @MainActor (String) -> Void,
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void,
         onFinish: @escaping @MainActor (CleanupRunResult) -> Void
     ) throws {
         guard process == nil else { return }
 
         let scriptURL = try scriptLocator.locateScript()
         wasCancelled = false
+        wasTimedOut = false
 
         let process = Process()
 
@@ -82,8 +86,8 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
         process.standardError = stderrPipe
         process.standardInput = FileHandle.nullDevice
 
-        let stdoutReader = makeReader(for: stdoutPipe.fileHandleForReading, onLine: onLine)
-        let stderrReader = makeReader(for: stderrPipe.fileHandleForReading, onLine: onLine)
+        let stdoutReader = makeReader(for: stdoutPipe.fileHandleForReading, stream: .stdout, onLine: onLine)
+        let stderrReader = makeReader(for: stderrPipe.fileHandleForReading, stream: .stderr, onLine: onLine)
 
         self.process = process
         self.stdoutReader = stdoutReader
@@ -94,7 +98,8 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
 
         process.terminationHandler = { [weak self] finishedProcess in
             // Drain the tails of both pipes before reporting the exit code.
-            let tailLines = stdoutReader.finish() + stderrReader.finish()
+            let tailLines = stdoutReader.finish().map { ($0, CleanupOutputStream.stdout) }
+                + stderrReader.finish().map { ($0, CleanupOutputStream.stderr) }
 
             let status = finishedProcess.terminationStatus
             let reason = finishedProcess.terminationReason
@@ -104,13 +109,14 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
                 // The tail is delivered in the same MainActor turn as the
                 // completion callback, so the last lines can never be appended
                 // to the log of the run that follows this one.
-                for line in tailLines {
-                    onLine(line)
+                for (line, stream) in tailLines {
+                    onLine(line, stream)
                 }
                 let result = CleanupRunResult(
                     exitCode: status,
                     terminationReason: reason,
-                    wasCancelled: self.wasCancelled
+                    wasCancelled: self.wasCancelled,
+                    wasTimedOut: self.wasTimedOut
                 )
                 self.resetProcess()
                 onFinish(result)
@@ -143,14 +149,18 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
         }
     }
 
-    private func startTimeout(for process: Process, onLine: @escaping @MainActor (String) -> Void) {
+    private func startTimeout(
+        for process: Process,
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void
+    ) {
         // Captured by value: the closure must not reach for `self` before the
         // `weak` capture is resolved (and the value never changes anyway).
         let timeout = self.timeout
         timeoutTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: timeout)
             guard let self, self.process === process, process.isRunning else { return }
-            onLine(String(localized: ">>> Timeout: stopping the process…"))
+            self.wasTimedOut = true
+            onLine(String(localized: ">>> Timeout: stopping the process…"), .stderr)
             self.signalProcess(process, SIGTERM)
             try? await Task.sleep(for: .seconds(3))
             if self.process === process, process.isRunning {
@@ -174,12 +184,13 @@ final class ProcessCleanupScriptRunner: CleanupScriptRunning {
 
     private func makeReader(
         for handle: FileHandle,
-        onLine: @escaping @MainActor (String) -> Void
+        stream: CleanupOutputStream,
+        onLine: @escaping @MainActor (String, CleanupOutputStream) -> Void
     ) -> LineStreamReader {
         LineStreamReader(handle: handle) { lines in
             Task { @MainActor in
                 for line in lines {
-                    onLine(line)
+                    onLine(line, stream)
                 }
             }
         }

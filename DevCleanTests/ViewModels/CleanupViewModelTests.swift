@@ -313,8 +313,99 @@ struct CleanupViewModelTests {
         runner.emit("@@MODULE|ai|AI agents|1")
         runner.finish(exitCode: 0)
         viewModel.cleanSelected()
-        staleHandler?("stale line")
+        staleHandler?("stale line", .stdout)
 
         #expect(!viewModel.logOutput.contains("stale line"))
+    }
+
+    // MARK: - Issue classification (human-readable error state)
+
+    @Test func successfulRunReportsSuccessIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.finish(exitCode: 0)
+
+        #expect(viewModel.lastIssue == .success)
+    }
+
+    @Test func nonZeroExitReportsFailedIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.finish(exitCode: 3)
+
+        #expect(viewModel.lastIssue == .failed(exitCode: 3))
+    }
+
+    @Test func stderrFailureCountBecomesPartialFailureIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.emit(">>> 3 operation(s) failed.", on: .stderr)
+        runner.finish(exitCode: 1)
+
+        #expect(viewModel.lastIssue == .partialFailure(count: 3))
+    }
+
+    @Test func cancelledRunReportsCancelledIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.finish(exitCode: 15, reason: .uncaughtSignal, wasCancelled: true)
+
+        #expect(viewModel.lastIssue == .cancelled)
+    }
+
+    @Test func timeoutReportsTimeoutIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.finish(exitCode: 15, reason: .uncaughtSignal, wasTimedOut: true)
+
+        #expect(viewModel.lastIssue == .timeout)
+    }
+
+    @Test func signalWithoutCancellationReportsInterruptedIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.finish(exitCode: 9, reason: .uncaughtSignal)
+
+        #expect(viewModel.lastIssue == .interruptedBySignal(code: 9))
+    }
+
+    @Test func scriptLocationErrorBecomesLaunchFailedIssue() {
+        let (viewModel, runner, _) = makeViewModel()
+        runner.runError = ScriptLocationError.missingFromBundle(name: "clean-dev-cache", fileExtension: "sh")
+
+        viewModel.analyze()
+
+        guard case .launchFailed = viewModel.lastIssue else {
+            Issue.record("expected .launchFailed, got \(String(describing: viewModel.lastIssue))")
+            return
+        }
+    }
+
+    @Test func issueResetsWhenANewRunStarts() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.finish(exitCode: 1)
+        #expect(viewModel.lastIssue == .failed(exitCode: 1))
+
+        viewModel.analyze()
+        #expect(viewModel.lastIssue == nil)
+    }
+
+    @Test func stderrLinesStayInTheLogAndAreFlagged() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.emit("regular line")
+        runner.emit(">>> 1 operation(s) failed.", on: .stderr)
+        runner.finish(exitCode: 1)
+
+        // The raw transcript keeps every line for Copy/inspection…
+        #expect(viewModel.logOutput.contains("regular line"))
+        #expect(viewModel.logOutput.contains(">>> 1 operation(s) failed."))
+        // …while the presentation state marks the error line (the run's
+        // trailer lines follow, so only the head of the log is compared).
+        #expect(Array(viewModel.logLines.prefix(2)) == [
+            LogLine(text: "regular line", isFromStderr: false),
+            LogLine(text: ">>> 1 operation(s) failed.", isFromStderr: true),
+        ])
     }
 }

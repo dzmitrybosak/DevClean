@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%lld operation(s) failed" : {
+
+    },
     ">>> Cancellation: SIGTERM sent…" : {
       "localizations" : {
         "ru" : {
@@ -81,6 +84,9 @@
         }
       }
     },
+    "Cancelled" : {
+
+    },
     "Carthage" : {
       "localizations" : {
         "ru" : {
@@ -90,6 +96,9 @@
           }
         }
       }
+    },
+    "Check the highlighted lines in the log for the cause." : {
+
     },
     "Clean" : {
       "localizations" : {
@@ -191,6 +200,9 @@
         }
       }
     },
+    "Could not start the script" : {
+
+    },
     "Dev Cache Cleaner" : {
       "localizations" : {
         "ru" : {
@@ -222,6 +234,7 @@
       }
     },
     "Exit code: %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -230,6 +243,9 @@
           }
         }
       }
+    },
+    "Failed — exit code %d" : {
+
     },
     "Failed to launch the process: %@" : {
       "localizations" : {
@@ -240,6 +256,9 @@
           }
         }
       }
+    },
+    "Interrupted by signal %d" : {
+
     },
     "Log" : {
       "localizations" : {
@@ -280,6 +299,9 @@
           }
         }
       }
+    },
+    "Rebuild the project (⌘R) so the script is placed in the app bundle again." : {
+
     },
     "Rescan" : {
       "localizations" : {
@@ -361,6 +383,9 @@
         }
       }
     },
+    "Some operations did not complete. Check the highlighted lines in the log, then run the action again." : {
+
+    },
     "Success" : {
       "localizations" : {
         "ru" : {
@@ -391,6 +416,15 @@
         }
       }
     },
+    "The process ran too long and was stopped. Try cleaning fewer modules at a time." : {
+
+    },
+    "The process was killed by the system. Run the action again." : {
+
+    },
+    "The run was stopped on request. Start it again when ready." : {
+
+    },
     "The script %@.%@ was not found in the app bundle." : {
       "localizations" : {
         "ru" : {
@@ -410,6 +444,9 @@
           }
         }
       }
+    },
+    "Timed out — process stopped" : {
+
     },
     "Xcode & iOS" : {
       "localizations" : {

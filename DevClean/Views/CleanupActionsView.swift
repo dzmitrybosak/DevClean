@@ -31,8 +31,8 @@ struct CleanupActionsView: View {
 
             Spacer()
 
-            if let exitCode = viewModel.lastExitCode, !viewModel.isBusy {
-                exitStatusLabel(exitCode: exitCode)
+            if let issue = viewModel.lastIssue, !viewModel.isBusy {
+                issueStatusLabel(issue)
             }
         }
     }
@@ -58,15 +58,42 @@ struct CleanupActionsView: View {
     }
 
     @ViewBuilder
-    private func exitStatusLabel(exitCode: Int32) -> some View {
-        if exitCode == 0 {
-            Label("Success", systemImage: "checkmark.circle.fill")
-                .font(.callout)
-                .foregroundStyle(.green)
-        } else {
-            Label("Exit code: \(Int(exitCode))", systemImage: "exclamationmark.triangle.fill")
-                .font(.callout)
-                .foregroundStyle(.orange)
+    private func issueStatusLabel(_ issue: CleanupRunIssue) -> some View {
+        let label = Label {
+            Text(issue.label)
+        } icon: {
+            Image(systemName: iconName(for: issue))
+        }
+        .font(.callout)
+        .foregroundStyle(tint(for: issue))
+        .help(issue.recoverySuggestion ?? issue.label)
+
+        label
+    }
+
+    private func iconName(for issue: CleanupRunIssue) -> String {
+        switch issue {
+        case .success:
+            "checkmark.circle.fill"
+        case .cancelled:
+            "stop.circle.fill"
+        case .launchFailed:
+            "xmark.octagon.fill"
+        case .partialFailure, .failed, .timeout, .interruptedBySignal:
+            "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func tint(for issue: CleanupRunIssue) -> Color {
+        switch issue {
+        case .success:
+            .green
+        case .cancelled:
+            .secondary
+        case .launchFailed:
+            .red
+        case .partialFailure, .failed, .timeout, .interruptedBySignal:
+            .orange
         }
     }
 }
