@@ -1,23 +1,23 @@
 # Dev Cache Cleaner (DevClean)
 
-Нативная macOS-утилита на SwiftUI для очистки кэшей разработчика. Сначала приложение
-запускает анализ и показывает **разбивку по 9 модулям с реальными размерами**, затем вы
-отмечаете нужные модули и запускаете очистку только их.
+A native macOS utility built with SwiftUI for cleaning developer caches. On launch, the app
+first runs an analysis and shows a **breakdown of 9 modules with real sizes**, then you
+select the modules you want and clean only those.
 
-## Требования
+## Requirements
 
-- macOS 14 или новее
-- Xcode 27.2 или новее (проект использует новый формат `project.xcproj`)
+- macOS 14 or later
+- Xcode 27.2 or later (the project uses the new `project.xcproj` format)
 
-## Сборка и запуск
+## Build and run
 
-### В Xcode
+### In Xcode
 
-1. Откройте `DevClean.xcodeproj`.
-2. Выберите схему **DevClean** и destination **My Mac**.
-3. Нажмите **⌘R**.
+1. Open `DevClean.xcodeproj`.
+2. Select the **DevClean** scheme and the **My Mac** destination.
+3. Press **⌘R**.
 
-### Из терминала
+### From the terminal
 
 ```bash
 xcodebuild -scheme DevClean -configuration Release \
@@ -26,67 +26,67 @@ xcodebuild -scheme DevClean -configuration Release \
 open .build/Build/Products/Release/DevClean.app
 ```
 
-Приложение подписано ad-hoc. При переносе на другой Mac Gatekeeper может попросить
-открыть его через контекстное меню → **Open**.
+The app is ad-hoc signed. When moved to another Mac, Gatekeeper may ask you to
+open it via the context menu → **Open**.
 
-## Архитектура
+## Architecture
 
-Проект построен по MVVM; зависимости собираются в одном composition root
+The project follows MVVM; dependencies are assembled in a single composition root
 (`App/AppDependencies.swift`).
 
-- `Domain/` — модели и каталог модулей (`CleanupModuleCatalog` — единственный
-  источник правды о списке модулей), конечный автомат `CleanupRunState`.
-- `Services/` — инфраструктура за протоколами: поиск скрипта в бандле,
-  запуск процесса и стриминг вывода, парсер протокола `@@...`, буфер обмена.
-- `ViewModels/` — `CleanupViewModel`: состояние экрана и интенты
+- `Domain/` — models and the module catalog (`CleanupModuleCatalog` — the single
+  source of truth for the module list), plus the `CleanupRunState` state machine.
+- `Services/` — infrastructure behind protocols: locating the script in the bundle,
+  running the process and streaming output, parsing the `@@...` protocol, the clipboard.
+- `ViewModels/` — `CleanupViewModel`: screen state and intents
   (`startIfNeeded`, `analyze`, `cleanSelected`, `cancel`).
-- `Views/` — только представление; каждая секция экрана вынесена в отдельный View.
-- `Support/` — общие хелперы (форматирование размеров).
+- `Views/` — presentation only; each section of the screen is a separate View.
+- `Support/` — shared helpers (size formatting).
 
-Поток данных: View → ViewModel → сервисы → `clean-dev-cache.sh` → события
-парсера → ViewModel → View.
+Data flow: View → ViewModel → services → `clean-dev-cache.sh` → parser events →
+ViewModel → View.
 
 
-## Как это работает
+## How it works
 
-1. При запуске автоматически выполняется
-   `clean-dev-cache.sh --analyze --modules <все 9>`. Журнал обновляется в реальном
-   времени по мере поступления вывода.
-2. Скрипт завершает каждую секцию строкой `@@MODULE|id|name|bytes`. Приложение
-   перехватывает эти строки, добавляет модуль в список и показывает размер через
-   `ByteCountFormatter` (стиль `.file`). В журнал служебные строки `@@...` не попадают.
-3. По умолчанию отмечены 6 модулей из 9. **Xcode Archives**, **Simulator data (erase all)**
-   и **Docker** не отмечены — см. ниже.
-4. **Пересканировать** повторяет анализ. **Очистить выбранное** показывает
-   подтверждение со списком модулей и запускает
-   `--execute --modules id1,id2,...` только для отмеченных.
-5. Во время работы видны `ProgressView` и кнопка **Отмена** (SIGTERM). После успешной
-   очистки автоматически запускается новый анализ, поэтому размеры на экране
-   обновляются (у очищенных модулей — около нуля; у `docker` размер не уменьшается,
-   см. таблицу ниже).
-6. Если отменить очистку, список модулей и их размеры остаются на месте — можно
-   повторить попытку или пересканировать.
-7. Если отменить анализ, список остаётся неполным: очистка блокируется до
-   пересканирования (в заголовке списка появляется предупреждение).
+1. On launch, the app automatically runs
+   `clean-dev-cache.sh --analyze --modules <all 9>`. The log updates in
+   real time as output arrives.
+2. The script ends each section with a line `@@MODULE|id|name|bytes`. The app
+   intercepts these lines, adds the module to the list, and displays the size via
+   `ByteCountFormatter` (`.file` style). Service `@@...` lines never appear in the log.
+3. By default, 6 of the 9 modules are selected. **Xcode Archives**, **Simulator data (erase all)**,
+   and **Docker** are not selected — see below.
+4. **Rescan** repeats the analysis. **Clean selected** shows a
+   confirmation with the list of modules and runs
+   `--execute --modules id1,id2,...` for the selected ones only.
+5. While running, a `ProgressView` and a **Cancel** button are visible (SIGTERM). After a successful
+   cleanup, a new analysis starts automatically, so the sizes on screen
+   update (cleaned modules show near zero; `docker`'s size does not decrease,
+   see the table below).
+6. If you cancel a cleanup, the module list and sizes remain in place — you can
+   retry or rescan.
+7. If you cancel an analysis, the list stays incomplete: cleanup is blocked until
+   you rescan (a warning appears in the list header).
 
-### Модули
+### Modules
 
-| ID | Имя в UI | Что очищается |
+| ID | Name in UI | What is cleaned |
 | --- | --- | --- |
-| `xcode` | Xcode & iOS | DerivedData, iOS/watchOS/tvOS DeviceSupport, кэш Xcode, кэш CoreSimulator, недоступные симуляторы (`simctl delete unavailable`) |
+| `xcode` | Xcode & iOS | DerivedData, iOS/watchOS/tvOS DeviceSupport, Xcode cache, CoreSimulator cache, unavailable simulators (`simctl delete unavailable`) |
 | `xcode-archives` | Xcode Archives | `~/Library/Developer/Xcode/Archives` |
-| `xcode-simulators` | Simulator data (erase all) | `xcrun simctl erase all` — данные **всех** симуляторов |
+| `xcode-simulators` | Simulator data (erase all) | `xcrun simctl erase all` — data of **all** simulators |
 | `swiftpm` | SwiftPM | `~/Library/Caches/org.swift.swiftpm` |
 | `cocoapods` | CocoaPods | `~/Library/Caches/CocoaPods` + `pod cache clean --all` |
 | `carthage` | Carthage | `~/Library/Caches/org.carthage.CarthageKit`, `~/Library/Caches/carthage` |
 | `packages` | Package managers | Homebrew, npm, yarn, pnpm, Gradle, pip, uv, Go build cache |
-| `ai` | AI agents | Кэши Claude Desktop/Code, ChatGPT, OpenCode, MiMo Code и Xiaomi MiMo AI |
-| `docker` | Docker | `docker builder prune -af`, `docker image prune -af`; размер неизвестен до очистки (`Docker.raw` не уменьшается при prune) |
+| `ai` | AI agents | Caches of Claude Desktop/Code, ChatGPT, OpenCode, MiMo Code, and Xiaomi MiMo AI |
+| `docker` | Docker | `docker builder prune -af`, `docker image prune -af`; size is unknown before cleanup (`Docker.raw` does not shrink on prune) |
 
-### Что чистит модуль `ai`
+### What the `ai` module cleans
 
-Удаляются только кэши; `~/Library/Application Support/...` не затрагивается, чтобы не
-потерять настройки и историю.
+Only caches are deleted; `~/Library/Application Support/...` is left untouched so that
+settings and history are not lost.
 
 - **Claude Desktop**: `~/Library/Caches/com.anthropic.claudefordesktop`,
   `~/Library/Caches/com.anthropic.claudefordesktop.ShipIt`
@@ -95,47 +95,48 @@ open .build/Build/Products/Release/DevClean.app
   `~/Library/Caches/com.openai.ChatGPT`
 - **OpenCode**: `~/Library/Caches/opencode`, `~/.cache/opencode`
 - **MiMo Code**: `~/.cache/mimocode`
-- **Xiaomi MiMo AI**: каталоги внутри `~/Library/Caches`, имя которых начинается
-  с `com.xiaomi` или `com.mimo` (регистр не важен). Поиск по шаблону нужен,
-  потому что bundle id приложения может меняться; `find --print0` корректно
-  обрабатывает пробелы в путях.
+- **Xiaomi MiMo AI**: directories inside `~/Library/Caches` whose names start
+  with `com.xiaomi` or `com.mimo` (case-insensitive). Pattern matching is needed
+  because the app's bundle ID may change; `find --print0` correctly
+  handles spaces in paths.
 
-Отсутствующие пути пропускаются и показываются в журнале как `(not found)`.
+Missing paths are skipped and shown in the log as `(not found)`.
 
-### Почему `xcode-archives`, `xcode-simulators` и `docker` по умолчанию выключены
+### Why `xcode-archives`, `xcode-simulators`, and `docker` are off by default
 
-Архивы Xcode (`.xcarchive`) содержат dSYM и бинарники прошлых сборок. Они нужны для
-символизации крашей и иногда для повторной подписи/экспорта сборки. Это не «мусор»,
-который безопасно удалять при каждой очистке, поэтому модуль включается только вручную.
+Xcode archives (`.xcarchive`) contain dSYMs and binaries from past builds. They are needed for
+symbolicating crashes and sometimes for re-signing/exporting a build. They are not "junk"
+that is safe to delete on every cleanup, so this module is enabled only manually.
 
-`xcode-simulators` тоже требует осознанного выбора: `simctl erase all` стирает данные
-всех симуляторов, а не только кэши.
+`xcode-simulators` also requires a deliberate choice: `simctl erase all` wipes the data
+of all simulators, not just caches.
 
-`docker` выключен, потому что очистка Docker затрагивает общие ресурсы демона, а не
-только кэш текущего проекта. Модуль удаляет build cache и неиспользуемые образы;
-**тома (volumes) не трогаются** — в них часто лежат базы данных и состояние
-остановленных контейнеров.
+`docker` is off because cleaning Docker affects the daemon's shared resources, not
+just the current project's cache. The module deletes the build cache and unused images;
+**volumes are not touched** — they often hold databases and the state of
+stopped containers.
 
 ## App Sandbox
 
-Sandbox **отключён** в проекте (`ENABLE_APP_SANDBOX = NO`), иначе процесс не получит
-доступ к `~/Library/Developer/...`, `~/Library/Caches/...` и домашним каталогам
-менеджеров пакетов. При этом **Hardened Runtime включён** (`ENABLE_HARDENED_RUNTIME = YES`);
-он применяется к сборкам с нормальной подписью (ad-hoc подпись из примера выше
-отключает его — это ограничение ad-hoc, а не настройки проекта).
+The sandbox is **disabled** in the project (`ENABLE_APP_SANDBOX = NO`); otherwise the process
+would not get access to `~/Library/Developer/...`, `~/Library/Caches/...`, and the home
+directories of package managers. At the same time, **Hardened Runtime is enabled**
+(`ENABLE_HARDENED_RUNTIME = YES`); it applies to builds with a proper signature
+(the ad-hoc signature from the example above disables it — that is an ad-hoc limitation,
+not a project setting).
 
-Если включаете настройку заново или создаёте target с нуля:
+If you re-enable the setting or create the target from scratch:
 
-1. Выберите target **DevClean** → вкладка **Signing & Capabilities**.
-2. Удалите/снимите галочку **App Sandbox**.
-3. Либо в **Build Settings** установите `ENABLE_APP_SANDBOX = NO`.
+1. Select the **DevClean** target → **Signing & Capabilities** tab.
+2. Remove/uncheck **App Sandbox**.
+3. Alternatively, set `ENABLE_APP_SANDBOX = NO` in **Build Settings**.
 
-Это личная утилита, не для App Store.
+This is a personal utility, not intended for the App Store.
 
-## Скрипт вручную
+## Running the script manually
 
-Скрипт можно запускать из терминала для отладки — он печатает `@@MODULE|...` в конце
-каждой секции и `@@DONE` в конце:
+You can run the script from the terminal for debugging — it prints `@@MODULE|...` at the end
+of each section and `@@DONE` at the end:
 
 ```bash
 DevClean/clean-dev-cache.sh --analyze
@@ -143,55 +144,56 @@ DevClean/clean-dev-cache.sh --analyze --modules xcode,packages
 DevClean/clean-dev-cache.sh --execute --modules xcode
 ```
 
-Скрипт рассчитан на bash 3.2+, который поставляется с macOS: ассоциативные массивы
-(`declare -A`, требующие bash 4) не используются, поэтому `#!/usr/bin/env bash`
-работает без установки Homebrew bash.
+The script targets bash 3.2+, which ships with macOS: associative arrays
+(`declare -A`, which require bash 4) are not used, so `#!/usr/bin/env bash`
+works without installing Homebrew bash.
 
-## Ошибки в интерфейсе
+## Errors in the UI
 
-Ошибки скрипта выводятся в UI, а не только в консоли Xcode:
+Script errors are shown in the UI, not just in the Xcode console:
 
-- **Статус-лейбл** рядом с кнопками запуска вместо сырого `Exit code: N`.
-  Тип результата классифицируется в `CleanupRunIssue`
-  (`DevClean/Domain/CleanupRunIssue.swift`): успех, отмена, частичные ошибки
-  (`N operation(s) failed.` из stderr), ненулевой код выхода, таймаут,
-  прерывание сигналом, ошибка запуска скрипта. Каждый тип имеет понятный
-  локализованный текст, цвет (зелёный/оранжевый/красный/серый), иконку и
-  подсказку с рекомендацией (`.help`).
-- **Подсветка stderr в логе.** `CleanupViewModel` хранит вывод как
-  `LogLine(text:isFromStderr:)`, а `LogPanelView` рисует строки из stderr
-  красным через `AttributedString`. Весь сырой stdout+stderr по-прежнему
-  доступен целиком, включая кнопку копирования.
+- **Status label** next to the action buttons instead of a raw `Exit code: N`.
+  The result type is classified in `CleanupRunIssue`
+  (`DevClean/Domain/CleanupRunIssue.swift`): success, cancellation, partial errors
+  (`N operation(s) failed.` from stderr), non-zero exit code, timeout,
+  signal termination, script launch failure. Each type has a clear
+  localized text, color (green/orange/red/gray), icon, and
+  a tooltip with a recommendation (`.help`).
+- **stderr highlighting in the log.** `CleanupViewModel` stores output as
+  `LogLine(text:isFromStderr:)`, and `LogPanelView` renders stderr lines
+  in red via `AttributedString`. The full raw stdout+stderr is still
+  available in its entirety, including the copy button.
 
-## Технические решения
+## Technical decisions
 
-- **PATH.** GUI-приложения не наследуют PATH из `.zshrc`, поэтому в
-  `Process.environment` явно задан
-  `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`.
-- **Запуск.** `Process` запускает `/bin/bash <путьКСкрипту> --analyze|--execute
-  --modules id1,id2,…`: путь к скрипту передаётся как argv, без промежуточного
-  шелла и без интерполяции, поэтому спецсимволы в пути безопасны. Executable-бит
-  и валидный shebang не требуются — bash получает путь аргументом.
-- **Стриминг.** stdout и stderr читаются независимо через `Pipe` +
-  `FileHandle.readabilityHandler`; данные буферизуются до целых строк на уровне байтов,
-  поэтому многобайтовые UTF-8 символы и строка `@@MODULE|...` не рвутся между чанками.
-  Хвостовой вывод дописывается в том же MainActor-джобе, что и результат завершения;
-  все обновления состояния выполняются на `@MainActor`.
-- **Завершение.** `terminationHandler` дожидается остатков вывода (неблокирующее
-  чтение, чтобы зависший дочерний процесс не блокировал UI), печатает код выхода
-  и сбрасывает состояние. После успешного `--execute` вызывается `analyze()`.
-- **Отмена.** Сигнал `SIGTERM` отправляется в группу процессов напрямую
-  (`killpg`, если процесс — лидер группы), через 3 секунды — `SIGKILL`, если процесс
-  не завершился. После отмены автоматический повторный анализ не запускается.
+- **PATH.** GUI apps do not inherit PATH from `.zshrc`, so
+  `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin` is set explicitly in
+  `Process.environment`.
+- **Launch.** `Process` runs `/bin/bash <pathToScript> --analyze|--execute
+  --modules id1,id2,…`: the script path is passed as argv, without an intermediate
+  shell and without interpolation, so special characters in the path are safe. The executable bit
+  and a valid shebang are not required — bash receives the path as an argument.
+- **Streaming.** stdout and stderr are read independently via `Pipe` +
+  `FileHandle.readabilityHandler`; data is buffered up to whole lines at the byte level,
+  so multi-byte UTF-8 characters and the `@@MODULE|...` line are not split between chunks.
+  Trailing output is appended in the same MainActor job as the termination result;
+  all state updates run on `@MainActor`.
+- **Termination.** `terminationHandler` waits for the remaining output (non-blocking
+  reads, so a hung child process cannot block the UI), prints the exit code,
+  and resets the state. After a successful `--execute`, `analyze()` is called.
+- **Cancellation.** `SIGTERM` is sent to the process group directly
+  (`killpg` if the process is the group leader), followed by `SIGKILL` after 3 seconds
+  if the process has not terminated. After cancellation, no automatic re-analysis is
+  started.
 
-## Тесты
+## Tests
 
-Юнит-тесты покрывают парсер вывода, каталог модулей, состояние запуска, ViewModel,
-построчное чтение, запуск процесса и сам bash-скрипт (в изолированном временном `HOME`).
+Unit tests cover the output parser, the module catalog, the run state, the ViewModel,
+line-by-line reading, process launching, and the bash script itself (in an isolated temporary `HOME`).
 
 ```bash
 xcodebuild test -scheme DevClean -destination 'platform=macOS' -derivedDataPath .build
 ```
 
-Тесты не обращаются к реальному домашнему каталогу, а `docker` и `xcrun` подменяются
-шим-скриптами, поэтому реальные образы и симуляторы не затрагиваются.
+Tests do not touch the real home directory, and `docker` and `xcrun` are replaced by
+shim scripts, so real images and simulators are not affected.
