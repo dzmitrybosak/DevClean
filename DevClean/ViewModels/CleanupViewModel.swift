@@ -85,12 +85,20 @@ final class CleanupViewModel {
             .map { "• \($0.displayName) — \($0.sizeBytes.byteCountFormatted)" }
             .joined(separator: "\n")
 
+        // Emulator data is not a cache: spell out what exactly is lost before
+        // the final "Continue?" question.
+        let warning = selectedModuleIDs.contains(CleanupModuleCatalog.androidAVDModuleID)
+            ? String(
+                localized: "All Android emulator data will be permanently deleted. Devices and their state (apps, settings, snapshots) cannot be recovered."
+            ) + "\n\n"
+            : ""
+
         return String(
             localized: """
             The following will be cleaned:
             \(list)
 
-            This action cannot be undone. Continue?
+            \(warning)This action cannot be undone. Continue?
             """
         )
     }

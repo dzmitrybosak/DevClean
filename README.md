@@ -1,7 +1,7 @@
 # Dev Cache Cleaner (DevClean)
 
 A native macOS utility built with SwiftUI for cleaning developer caches. On launch, the app
-first runs an analysis and shows a **breakdown of 9 modules with real sizes**, then you
+first runs an analysis and shows a **breakdown of 11 modules with real sizes**, then you
 select the modules you want and clean only those.
 
 ## Requirements
@@ -50,13 +50,13 @@ ViewModel → View.
 ## How it works
 
 1. On launch, the app automatically runs
-   `clean-dev-cache.sh --analyze --modules <all 9>`. The log updates in
+   `clean-dev-cache.sh --analyze --modules <all 11>`. The log updates in
    real time as output arrives.
 2. The script ends each section with a line `@@MODULE|id|name|bytes`. The app
    intercepts these lines, adds the module to the list, and displays the size via
    `ByteCountFormatter` (`.file` style). Service `@@...` lines never appear in the log.
-3. By default, 6 of the 9 modules are selected. **Xcode Archives**, **Simulator data (erase all)**,
-   and **Docker** are not selected — see below.
+3. By default, 7 of the 11 modules are selected. **Xcode Archives**, **Simulator data (erase all)**,
+   **Android Emulators (AVD)**, and **Docker** are not selected — see below.
 4. **Rescan** repeats the analysis. **Clean selected** shows a
    confirmation with the list of modules and runs
    `--execute --modules id1,id2,...` for the selected ones only.
@@ -79,8 +79,10 @@ ViewModel → View.
 | `swiftpm` | SwiftPM | `~/Library/Caches/org.swift.swiftpm` |
 | `cocoapods` | CocoaPods | `~/Library/Caches/CocoaPods` + `pod cache clean --all` |
 | `carthage` | Carthage | `~/Library/Caches/org.carthage.CarthageKit`, `~/Library/Caches/carthage` |
-| `packages` | Package managers | Homebrew, npm, yarn, pnpm, Gradle, pip, uv, Go build cache |
+| `packages` | Package managers | Homebrew, npm, yarn, pnpm, pip, uv, Go build cache |
 | `ai` | AI agents | Caches of Claude Desktop/Code, ChatGPT, OpenCode, MiMo Code, and Xiaomi MiMo AI |
+| `android` | Android Studio | IDE caches and logs for every installed Android Studio version, Gradle caches and wrapper distributions, `~/.android/cache`, `~/.android/build-cache` |
+| `android-avd` | Android Emulators (AVD) | `~/.android/avd` — data of **all** emulators (apps, settings, snapshots) |
 | `docker` | Docker | `docker builder prune -af`, `docker image prune -af`; size is unknown before cleanup (`Docker.raw` does not shrink on prune) |
 
 ### What the `ai` module cleans
@@ -102,7 +104,37 @@ settings and history are not lost.
 
 Missing paths are skipped and shown in the log as `(not found)`.
 
-### Why `xcode-archives`, `xcode-simulators`, and `docker` are off by default
+### What the `android` module cleans
+
+The module removes only regenerable caches and logs:
+
+- **IDE caches**: every `~/Library/Caches/Google/AndroidStudio*`,
+  `~/Library/Caches/AndroidStudio*`, and `~/Library/Caches/JetBrains/AndroidStudio*`
+  directory. The glob is needed because versioned names such as `AndroidStudio2024.1`
+  change between releases.
+- **IDE logs**: `~/Library/Logs/Google/AndroidStudio*`.
+- **Gradle**: `~/.gradle/caches` and `~/.gradle/wrapper/dists`.
+- **Android SDK caches**: `~/.android/cache` and `~/.android/build-cache`.
+
+It deliberately does **not** touch:
+
+- `~/Library/Application Support/Google/AndroidStudio*` — IDE settings, installed
+  plugins, and local history live there. Deleting it would reset the IDE
+  configuration instead of freeing disposable space.
+- `~/.android/avd` — emulator data is user data, not a cache. It is available only
+  through the separate `android-avd` module.
+- `~/.gradle/daemon` and `~/.gradle/native` — these are working files used by the
+  Gradle daemon and native integrations, not caches.
+
+Gradle caches used to be part of `packages`. They now belong to `android`: if you
+previously cleaned them via **Package managers**, select **Android Studio** instead —
+the `packages` module no longer touches Gradle.
+
+`android-avd` is off by default because emulator data is not a cache. Deleting
+`~/.android/avd` permanently removes every emulator together with its state
+(installed apps, settings, snapshots), so it runs only when explicitly checked.
+
+### Why `xcode-archives`, `xcode-simulators`, `android-avd`, and `docker` are off by default
 
 Xcode archives (`.xcarchive`) contain dSYMs and binaries from past builds. They are needed for
 symbolicating crashes and sometimes for re-signing/exporting a build. They are not "junk"
@@ -110,6 +142,9 @@ that is safe to delete on every cleanup, so this module is enabled only manually
 
 `xcode-simulators` also requires a deliberate choice: `simctl erase all` wipes the data
 of all simulators, not just caches.
+
+`android-avd` follows the same rule: `~/.android/avd` holds emulator disks and snapshots,
+so cleaning it destroys the devices themselves, not their caches.
 
 `docker` is off because cleaning Docker affects the daemon's shared resources, not
 just the current project's cache. The module deletes the build cache and unused images;

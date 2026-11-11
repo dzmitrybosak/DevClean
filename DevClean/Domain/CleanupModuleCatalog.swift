@@ -26,6 +26,10 @@ struct CleanupModuleDefinition: Identifiable, Hashable, Sendable {
 /// The order is meaningful: analysis results are presented in this order.
 /// Keep the identifiers in sync with `clean-dev-cache.sh`.
 enum CleanupModuleCatalog {
+    /// Emulator data is not a cache: the module is opt-in, and the UI warns
+    /// about irreversible deletion when it is selected.
+    static let androidAVDModuleID = "android-avd"
+
     static let all: [CleanupModuleDefinition] = [
         CleanupModuleDefinition(id: "xcode", name: "Xcode & iOS", localizedName: String(localized: "Xcode & iOS")),
         // Archives are useful for symbolication and erasing simulators destroys
@@ -37,6 +41,10 @@ enum CleanupModuleCatalog {
         CleanupModuleDefinition(id: "carthage", name: "Carthage", localizedName: String(localized: "Carthage")),
         CleanupModuleDefinition(id: "packages", name: "Package managers", localizedName: String(localized: "Package managers")),
         CleanupModuleDefinition(id: "ai", name: "AI agents", localizedName: String(localized: "AI agents")),
+        // Android Studio caches are safe to regenerate; emulator data is not a
+        // cache and is therefore a separate, opt-in module.
+        CleanupModuleDefinition(id: "android", name: "Android Studio", localizedName: String(localized: "Android Studio")),
+        CleanupModuleDefinition(id: CleanupModuleCatalog.androidAVDModuleID, name: "Android Emulators (AVD)", localizedName: String(localized: "Android Emulators (AVD)"), isSelectedByDefault: false),
         CleanupModuleDefinition(id: "docker", name: "Docker", localizedName: String(localized: "Docker"), isSelectedByDefault: false),
     ]
 

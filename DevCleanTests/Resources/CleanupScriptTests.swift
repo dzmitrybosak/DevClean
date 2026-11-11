@@ -235,4 +235,143 @@ struct CleanupScriptTests {
         #expect(result.stdout.contains("(not found)"))
         #expect(result.moduleIDs == ["swiftpm"])
     }
+
+    // MARK: - Android
+
+    @Test func androidModuleCoversIDECachesLogsAndGradle() throws {
+        let temp = try TempDirectory()
+        defer { temp.cleanUp() }
+
+        let caches = [
+            "Library/Caches/Google/AndroidStudio2024.1/file",
+            "Library/Caches/AndroidStudio2023.3/file",
+            "Library/Caches/JetBrains/AndroidStudio2022.2/file",
+        ]
+        let logs = "Library/Logs/Google/AndroidStudio2024.1/file"
+        let gradle = [".gradle/caches/file", ".gradle/wrapper/dists/file"]
+        let androidCaches = [".android/cache/file", ".android/build-cache/file"]
+        for path in caches + [logs] + gradle + androidCaches {
+            try temp.file(path)
+        }
+
+        let result = try runScript(
+            TestPaths.cleanupScript,
+            arguments: ["--execute", "--modules", "android"],
+            home: temp.url.path
+        )
+
+        #expect(result.status == 0)
+        #expect(result.moduleIDs == ["android"])
+        // Version-specific directory names are discovered through globs.
+        #expect(result.stdout.contains("IDE cache (AndroidStudio2024.1)"))
+        #expect(result.stdout.contains("IDE cache (AndroidStudio2023.3)"))
+        #expect(result.stdout.contains("IDE cache (AndroidStudio2022.2)"))
+        #expect(result.stdout.contains("IDE logs (AndroidStudio2024.1)"))
+        // The module size is the sum of every cleaned path, not just the last one.
+        let moduleLine = result.stdout
+            .split(separator: "\n")
+            .first { $0.hasPrefix("@@MODULE|android|") }
+        let reportedBytes = moduleLine.flatMap { Int($0.split(separator: "|").last ?? "") }
+        #expect((reportedBytes ?? 0) > 0)
+        for path in caches + [logs] + gradle + androidCaches {
+            #expect(!temp.exists(path))
+        }
+    }
+
+    @Test func androidModuleKeepsSettingsWorkingFilesAndAVD() throws {
+        let temp = try TempDirectory()
+        defer { temp.cleanUp() }
+
+        let protected = [
+            "Library/Application Support/Google/AndroidStudio2024.1/options/settings.xml",
+            ".android/avd/Pixel_API_35.avd/userdata.img",
+            ".gradle/daemon/8.9/daemon.log",
+            ".gradle/native/libfoo.dylib",
+        ]
+        for path in protected {
+            try temp.file(path)
+        }
+        try temp.file("Library/Caches/Google/AndroidStudio2024.1/file")
+
+        let result = try runScript(
+            TestPaths.cleanupScript,
+            arguments: ["--execute", "--modules", "android"],
+            home: temp.url.path
+        )
+
+        #expect(result.status == 0)
+        #expect(!temp.exists("Library/Caches/Google/AndroidStudio2024.1/file"))
+        for path in protected {
+            #expect(temp.exists(path), "android must not delete \(path)")
+        }
+    }
+
+    @Test func androidAVDIsDeletedOnlyWhenSelectedExplicitly() throws {
+        let temp = try TempDirectory()
+        defer { temp.cleanUp() }
+
+        let avd = ".android/avd/Pixel_API_35.avd/userdata.img"
+        let cache = "Library/Caches/Google/AndroidStudio2024.1/file"
+        try temp.file(avd)
+        try temp.file(cache)
+
+        let result = try runScript(
+            TestPaths.cleanupScript,
+            arguments: ["--execute", "--modules", "android-avd"],
+            home: temp.url.path
+        )
+
+        #expect(result.status == 0)
+        #expect(result.moduleIDs == ["android-avd"])
+        #expect(result.stdout.contains("DESTRUCTIVE"))
+        #expect(!temp.exists(avd))
+        // Selecting only the AVD module must not touch IDE caches.
+        #expect(temp.exists(cache))
+    }
+
+    @Test func androidIsShownEvenWhenNothingIsInstalled() throws {
+        let temp = try TempDirectory()
+        defer { temp.cleanUp() }
+
+        let result = try runScript(
+            TestPaths.cleanupScript,
+            arguments: ["--analyze", "--modules", "android,android-avd"],
+            home: temp.url.path
+        )
+
+        #expect(result.status == 0)
+        #expect(result.moduleIDs == ["android", "android-avd"])
+        // Every covered path is listed, including glob families with no match.
+        #expect(result.stdout.contains("IDE cache (Google/AndroidStudio*)"))
+        #expect(result.stdout.contains("IDE cache (AndroidStudio*)"))
+        #expect(result.stdout.contains("IDE cache (JetBrains/AndroidStudio*)"))
+        #expect(result.stdout.contains("IDE logs (Google/AndroidStudio*)"))
+        #expect(result.stdout.contains("Gradle caches"))
+        #expect(result.stdout.contains("Gradle wrapper dists"))
+        #expect(result.stdout.contains("Android cache"))
+        #expect(result.stdout.contains("Android build-cache"))
+        #expect(result.stdout.contains("Android AVD data"))
+        #expect(result.stdout.contains("(not found)"))
+    }
+
+    @Test func packagesNoLongerCleansGradleCaches() throws {
+        let temp = try TempDirectory()
+        defer { temp.cleanUp() }
+
+        try temp.file(".gradle/caches/file")
+        try temp.file("Library/Caches/Homebrew/file")
+
+        let result = try runScript(
+            TestPaths.cleanupScript,
+            arguments: ["--execute", "--modules", "packages"],
+            home: temp.url.path
+        )
+
+        #expect(result.status == 0)
+        #expect(!temp.exists("Library/Caches/Homebrew/file"))
+        // Gradle caches moved to the `android` module, so `packages` must leave
+        // them alone and must not mention them in its output.
+        #expect(temp.exists(".gradle/caches/file"))
+        #expect(!result.stdout.contains("gradle caches"))
+    }
 }

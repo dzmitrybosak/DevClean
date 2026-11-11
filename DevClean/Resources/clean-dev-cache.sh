@@ -11,7 +11,7 @@ fi
 # Single source of truth for the modules handled by this script. The order is
 # meaningful: totals are emitted in this order. Keep in sync with
 # CleanupModuleCatalog.swift.
-MODULE_IDS="xcode xcode-archives xcode-simulators swiftpm cocoapods carthage packages ai docker"
+MODULE_IDS="xcode xcode-archives xcode-simulators swiftpm cocoapods carthage packages ai android android-avd docker"
 
 MODE="analyze"
 MODULES_CSV=$(printf '%s' "$MODULE_IDS" | tr ' ' ',')
@@ -125,6 +125,8 @@ module_name() {
     carthage)         echo "Carthage" ;;
     packages)         echo "Package managers" ;;
     ai)               echo "AI agents" ;;
+    android)          echo "Android Studio" ;;
+    android-avd)      echo "Android Emulators (AVD)" ;;
     docker)           echo "Docker" ;;
     *)                echo "$1" ;;
   esac
@@ -153,6 +155,23 @@ handle_dir() {
   add_total "$module" "$b"
   printf "  %-50s %s\n" "$desc" "$(human_bytes "$b")"
   [ "$MODE" = "execute" ] && remove_keeping_self "$target"
+  return 0
+}
+
+# Apply handle_dir to every directory matched by a glob family. When nothing
+# matches, report the family as (not found) instead of hiding it: the log must
+# list every path the module covers, even when the app is not installed.
+handle_glob_dirs() {
+  local module="$1" desc="$2" missing_desc="$3"; shift 3
+  local found=0 d
+  for d in "$@"; do
+    [ -d "$d" ] || continue
+    found=1
+    handle_dir "$module" "$desc ($(basename "$d"))" "$d"
+  done
+  if [ "$found" -eq 0 ]; then
+    printf "  %-50s %s\n" "$missing_desc" "(not found)"
+  fi
   return 0
 }
 
@@ -230,6 +249,46 @@ handle_ai() {
 }
 # --------------------------------
 
+# ---------- Android Studio ----------
+# Only regenerable caches and logs. Never touches
+# ~/Library/Application Support/Google/AndroidStudio* (settings, plugins, local
+# history), ~/.android/avd (opt-in via android-avd), or ~/.gradle/daemon and
+# ~/.gradle/native (working files, not caches).
+handle_android() {
+  begin_module "Android Studio"
+
+  # Android Studio versions come and go, so match every installed version by
+  # glob and label each entry with the concrete directory name.
+  handle_glob_dirs android "IDE cache" \
+    "IDE cache (Google/AndroidStudio*)" \
+    "$HOME/Library/Caches/Google/AndroidStudio"*
+  handle_glob_dirs android "IDE cache" \
+    "IDE cache (AndroidStudio*)" \
+    "$HOME/Library/Caches/AndroidStudio"*
+  handle_glob_dirs android "IDE cache" \
+    "IDE cache (JetBrains/AndroidStudio*)" \
+    "$HOME/Library/Caches/JetBrains/AndroidStudio"*
+  handle_glob_dirs android "IDE logs" \
+    "IDE logs (Google/AndroidStudio*)" \
+    "$HOME/Library/Logs/Google/AndroidStudio"*
+
+  handle_dir android "Gradle caches"         "$HOME/.gradle/caches"
+  handle_dir android "Gradle wrapper dists"  "$HOME/.gradle/wrapper/dists"
+  handle_dir android "Android cache"         "$HOME/.android/cache"
+  handle_dir android "Android build-cache"   "$HOME/.android/build-cache"
+
+  end_module android
+}
+
+# Emulator data: user data, not a cache. Reachable only through this separate,
+# opt-in module.
+handle_android_avd() {
+  echo "=== Android Emulators (AVD) — DESTRUCTIVE ==="
+  handle_dir android-avd "Android AVD data" "$HOME/.android/avd"
+  end_module android-avd
+}
+# --------------------------------
+
 echo ">>> MODE: $MODE"
 echo ">>> Modules: $MODULES_CSV"
 echo
@@ -284,7 +343,6 @@ if selected packages; then
   handle_dir packages "npm cache"      "$HOME/.npm/_cacache"
   handle_dir packages "yarn cache"     "$HOME/Library/Caches/Yarn"
   handle_dir packages "pnpm store"     "$HOME/.pnpm-store"
-  handle_dir packages "gradle caches"  "$HOME/.gradle/caches"
   handle_dir packages "pip cache"      "$HOME/Library/Caches/pip"
   handle_dir packages "uv cache"       "$HOME/.cache/uv"
   handle_dir packages "go build cache" "$HOME/Library/Caches/go-build"
@@ -293,6 +351,14 @@ fi
 
 if selected ai; then
   handle_ai
+fi
+
+if selected android; then
+  handle_android
+fi
+
+if selected android-avd; then
+  handle_android_avd
 fi
 
 if selected docker; then

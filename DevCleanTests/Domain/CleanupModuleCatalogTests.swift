@@ -5,7 +5,7 @@ import Testing
 
 struct CleanupModuleCatalogTests {
     @Test func containsExpectedModules() {
-        #expect(CleanupModuleCatalog.all.count == 9)
+        #expect(CleanupModuleCatalog.all.count == 11)
         #expect(CleanupModuleCatalog.allIDs == [
             "xcode",
             "xcode-archives",
@@ -15,6 +15,8 @@ struct CleanupModuleCatalogTests {
             "carthage",
             "packages",
             "ai",
+            "android",
+            "android-avd",
             "docker",
         ])
     }
@@ -28,7 +30,7 @@ struct CleanupModuleCatalogTests {
         let optOut = CleanupModuleCatalog.all
             .filter { !$0.isSelectedByDefault }
             .map(\.id)
-        #expect(Set(optOut) == ["xcode-archives", "xcode-simulators", "docker"])
+        #expect(Set(optOut) == ["xcode-archives", "xcode-simulators", "android-avd", "docker"])
     }
 
     @Test func lookupMatchesDefinitions() {

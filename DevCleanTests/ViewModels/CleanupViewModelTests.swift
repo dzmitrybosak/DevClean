@@ -68,9 +68,11 @@ struct CleanupViewModelTests {
         runner.emit("@@MODULE|xcode-simulators|Simulators|1")
         runner.emit("@@MODULE|docker|Docker|1")
         runner.emit("@@MODULE|ai|AI agents|1")
+        runner.emit("@@MODULE|android|Android Studio|1")
+        runner.emit("@@MODULE|android-avd|Android Emulators (AVD)|1")
         runner.emit("@@MODULE|future|Future module|1")
 
-        #expect(viewModel.selectedModuleIDs == ["xcode", "ai", "future"])
+        #expect(viewModel.selectedModuleIDs == ["xcode", "ai", "android", "future"])
     }
 
     @Test func logReceivesPlainLines() {
@@ -260,6 +262,20 @@ struct CleanupViewModelTests {
         #expect(message.contains(String(localized: "Xcode & iOS")))
         #expect(message.contains(Int64(2048).byteCountFormatted))
         #expect(!message.contains("Docker"))
+    }
+
+    @Test func confirmationWarnsOnlyWhenAVDDataIsSelected() {
+        let (viewModel, runner, _) = makeViewModel()
+        viewModel.analyze()
+        runner.emit("@@MODULE|android|Android Studio|2048")
+        runner.emit("@@MODULE|android-avd|Android Emulators (AVD)|4096")
+
+        let warning = String(localized: "All Android emulator data will be permanently deleted. Devices and their state (apps, settings, snapshots) cannot be recovered.")
+        #expect(!viewModel.confirmationMessage.contains(warning))
+
+        viewModel.setSelected(true, for: "android-avd")
+
+        #expect(viewModel.confirmationMessage.contains(warning))
     }
 
     // MARK: - Partial analysis

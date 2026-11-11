@@ -54,6 +54,16 @@
         }
       }
     },
+    "All Android emulator data will be permanently deleted. Devices and their state (apps, settings, snapshots) cannot be recovered." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные всех эмуляторов Android будут удалены безвозвратно. Устройства и их состояние (приложения, настройки, снапшоты) восстановить не получится."
+          }
+        }
+      }
+    },
     "Analysis was interrupted — results are incomplete" : {
       "localizations" : {
         "ru" : {
@@ -70,6 +80,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Анализ…"
+          }
+        }
+      }
+    },
+    "Android Emulators (AVD)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эмуляторы Android (AVD)"
+          }
+        }
+      }
+    },
+    "Android Studio" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Android Studio"
           }
         }
       }
@@ -406,12 +436,12 @@
         }
       }
     },
-    "The following will be cleaned:\n%@\n\nThis action cannot be undone. Continue?" : {
+    "The following will be cleaned:\n%@\n\n%@This action cannot be undone. Continue?" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Будут очищены:\n%@\n\nДействие необратимо. Продолжить?"
+            "value" : "Будут очищены:\n%@\n\n%@Действие необратимо. Продолжить?"
           }
         }
       }
